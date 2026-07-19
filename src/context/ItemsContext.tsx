@@ -3,6 +3,7 @@ import * as db from '../db/database';
 import { useCategorias } from './CategoriasContext';
 import { agendarNotificacaoDoItem, cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { sincronizar } from '../sync/sync';
+import { proximaDataRecorrencia, proximaOcorrencia } from '../utils/recorrencia';
 import type { Item, NovoItem } from '../types/item';
 
 interface ItemsContextValue {
@@ -61,17 +62,34 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     [sincronizarAgora],
   );
 
+  // Se o item tem recorrência e acabou de ser concluído, cria a próxima
+  // ocorrência (mesmo título/categoria/horário, data avançada a partir da
+  // data original — não da data de hoje, pra não acumular atraso quando o
+  // item é concluído fora do dia previsto).
+  const gerarProximaOcorrenciaSeNecessario = useCallback(
+    (item: Item) => {
+      const proximaData = proximaDataRecorrencia(item.data, item.recorrencia);
+      if (proximaData) {
+        adicionarItem(proximaOcorrencia(item, proximaData));
+      }
+    },
+    [adicionarItem],
+  );
+
   const editarItem = useCallback(
     async (item: Item) => {
+      const itemAntes = itens.find((i) => i.id === item.id);
       await db.atualizarItem(item);
       setItens((atual) => atual.map((i) => (i.id === item.id ? item : i)));
       await cancelarNotificacoesDoItem(item.id);
       if (item.status === 'pendente') {
         agendarNotificacaoDoItem(item).catch(() => {});
+      } else if (itemAntes?.status === 'pendente' && item.status === 'feito') {
+        gerarProximaOcorrenciaSeNecessario(item);
       }
       sincronizarAgora();
     },
-    [sincronizarAgora],
+    [itens, sincronizarAgora, gerarProximaOcorrenciaSeNecessario],
   );
 
   const removerItem = useCallback(
@@ -96,12 +114,13 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       );
       if (novoStatus === 'feito') {
         await cancelarNotificacoesDoItem(id);
+        gerarProximaOcorrenciaSeNecessario({ ...item, status: novoStatus, concluidoEm });
       } else {
         agendarNotificacaoDoItem({ ...item, status: novoStatus, concluidoEm }).catch(() => {});
       }
       sincronizarAgora();
     },
-    [itens, sincronizarAgora],
+    [itens, sincronizarAgora, gerarProximaOcorrenciaSeNecessario],
   );
 
   return (

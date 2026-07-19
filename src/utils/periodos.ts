@@ -6,6 +6,9 @@ export function hojeISO(): string {
   return format(startOfDay(new Date()), 'yyyy-MM-dd');
 }
 
+// Períodos não se sobrepõem: cada item aparece em uma única aba. "15 dias"
+// cobre do depois-de-amanhã até o dia 15 (hoje/amanhã já têm aba própria);
+// "Mês" cobre do dia 16 até completar o mês (o que "15 dias" já não cobre).
 function intervaloDoPeriodo(periodo: PeriodoKey): { inicio: Date; fim: Date } {
   const hoje = startOfDay(new Date());
   switch (periodo) {
@@ -16,9 +19,9 @@ function intervaloDoPeriodo(periodo: PeriodoKey): { inicio: Date; fim: Date } {
       return { inicio: amanha, fim: amanha };
     }
     case 'quinzena':
-      return { inicio: hoje, fim: addDays(hoje, 15) };
+      return { inicio: addDays(hoje, 2), fim: addDays(hoje, 15) };
     case 'mes':
-      return { inicio: hoje, fim: addMonths(hoje, 1) };
+      return { inicio: addDays(hoje, 16), fim: addMonths(hoje, 1) };
   }
 }
 
