@@ -31,9 +31,9 @@ function horarioDoItem(item: Item): { hora: number; minuto: number } {
 export function calcularDisparoNotificacao(item: Item): Date | null {
   const [ano, mes, dia] = item.data.split('-').map(Number);
   const { hora, minuto } = horarioDoItem(item);
-  const disparo = new Date(ano, mes - 1, dia, hora, minuto);
-  disparo.setDate(disparo.getDate() - item.lembreteOffsetDias);
-  return disparo > new Date() ? disparo : null;
+  const disparo = new Date(ano, mes - 1, dia, hora, minuto, 0, 0);
+  const disparoComOffset = new Date(disparo.getTime() - item.lembreteOffsetMinutos * 60_000);
+  return disparoComOffset > new Date() ? disparoComOffset : null;
 }
 
 export async function agendarNotificacaoDoItem(item: Item): Promise<string | null> {

@@ -68,6 +68,11 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
       await db.runAsync(
         `UPDATE items SET atualizado_em = criado_em WHERE atualizado_em IS NULL`,
       );
+      // Migração: lembrete deixou de ser só em dias, agora é em minutos (mais granular).
+      await adicionarColunaSeNaoExistir(db, 'items', 'lembrete_offset_minutos', 'INTEGER');
+      await db.runAsync(
+        `UPDATE items SET lembrete_offset_minutos = lembrete_offset_dias * 1440 WHERE lembrete_offset_minutos IS NULL`,
+      );
       return db;
     });
   }
@@ -85,7 +90,7 @@ interface ItemRow {
   categoria: Item['categoria'];
   status: Item['status'];
   recorrencia: Item['recorrencia'];
-  lembrete_offset_dias: number;
+  lembrete_offset_minutos: number;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -103,7 +108,7 @@ function rowParaItem(row: ItemRow): Item {
     categoria: row.categoria,
     status: row.status,
     recorrencia: row.recorrencia,
-    lembreteOffsetDias: row.lembrete_offset_dias,
+    lembreteOffsetMinutos: row.lembrete_offset_minutos,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -132,7 +137,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
   await db.runAsync(
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
-      tipo_horario, categoria, status, recorrencia, lembrete_offset_dias, criado_em, concluido_em, atualizado_em
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, criado_em, concluido_em, atualizado_em
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       item.id,
@@ -145,7 +150,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
       item.categoria,
       item.status,
       item.recorrencia,
-      item.lembreteOffsetDias,
+      item.lembreteOffsetMinutos,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,
@@ -160,7 +165,7 @@ export async function atualizarItem(item: Item): Promise<void> {
   await db.runAsync(
     `UPDATE items SET
       texto_original = ?, titulo = ?, data = ?, hora_compromisso = ?, hora_limite = ?,
-      tipo_horario = ?, categoria = ?, status = ?, recorrencia = ?, lembrete_offset_dias = ?,
+      tipo_horario = ?, categoria = ?, status = ?, recorrencia = ?, lembrete_offset_minutos = ?,
       concluido_em = ?, atualizado_em = ?
     WHERE id = ?`,
     [
@@ -173,7 +178,7 @@ export async function atualizarItem(item: Item): Promise<void> {
       item.categoria,
       item.status,
       item.recorrencia,
-      item.lembreteOffsetDias,
+      item.lembreteOffsetMinutos,
       item.concluidoEm,
       atualizadoEm,
       item.id,
@@ -209,7 +214,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
   await db.runAsync(
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
-      tipo_horario, categoria, status, recorrencia, lembrete_offset_dias, criado_em, concluido_em, atualizado_em
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, criado_em, concluido_em, atualizado_em
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       texto_original = excluded.texto_original,
@@ -221,7 +226,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       categoria = excluded.categoria,
       status = excluded.status,
       recorrencia = excluded.recorrencia,
-      lembrete_offset_dias = excluded.lembrete_offset_dias,
+      lembrete_offset_minutos = excluded.lembrete_offset_minutos,
       concluido_em = excluded.concluido_em,
       atualizado_em = excluded.atualizado_em`,
     [
@@ -235,7 +240,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       item.categoria,
       item.status,
       item.recorrencia,
-      item.lembreteOffsetDias,
+      item.lembreteOffsetMinutos,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,

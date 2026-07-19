@@ -6,6 +6,7 @@ import { HojeScreen } from '../screens/HojeScreen';
 import { AmanhaScreen } from '../screens/AmanhaScreen';
 import { QuinzenaScreen } from '../screens/QuinzenaScreen';
 import { MesScreen } from '../screens/MesScreen';
+import { HistoricoScreen } from '../screens/HistoricoScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
 import { colors, corPorPeriodo } from '../theme/colors';
@@ -19,6 +20,7 @@ const ICONES_ABA: Record<string, string> = {
   Amanha: '➡️',
   Quinzena: '🗓️',
   Mes: '📆',
+  Historico: '✅',
   Config: '⚙️',
 };
 
@@ -37,6 +39,7 @@ function Tabs() {
       <Tab.Screen name="Amanha" component={AmanhaScreen} options={{ title: 'Amanhã' }} />
       <Tab.Screen name="Quinzena" component={QuinzenaScreen} options={{ title: '15 dias' }} />
       <Tab.Screen name="Mes" component={MesScreen} options={{ title: 'Mês' }} />
+      <Tab.Screen name="Historico" component={HistoricoScreen} options={{ title: 'Feitos' }} />
       <Tab.Screen name="Config" component={SettingsScreen} options={{ title: 'Config' }} />
     </Tab.Navigator>
   );

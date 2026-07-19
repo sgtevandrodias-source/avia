@@ -21,13 +21,25 @@ export interface Item {
   categoria: Categoria;
   status: Status;
   recorrencia: Recorrencia;
-  lembreteOffsetDias: number;
+  lembreteOffsetMinutos: number; // 0 = no horário do evento; >0 = minutos de antecedência
   criadoEm: string; // ISO datetime
   concluidoEm: string | null; // ISO datetime
   atualizadoEm: string; // ISO datetime — usado pela sincronização (last write wins)
 }
 
 export type NovoItem = Omit<Item, 'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm'>;
+
+export const PRESETS_LEMBRETE: { minutos: number; label: string }[] = [
+  { minutos: 0, label: 'No horário' },
+  { minutos: 5, label: '5 min antes' },
+  { minutos: 15, label: '15 min antes' },
+  { minutos: 30, label: '30 min antes' },
+  { minutos: 60, label: '1 hora antes' },
+  { minutos: 120, label: '2 horas antes' },
+  { minutos: 1440, label: '1 dia antes' },
+  { minutos: 2880, label: '2 dias antes' },
+  { minutos: 10080, label: '1 semana antes' },
+];
 
 export interface CategoriaItem {
   id: string;

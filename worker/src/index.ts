@@ -19,7 +19,7 @@ interface ItemApi {
   categoria: string;
   status: string;
   recorrencia: string;
-  lembreteOffsetDias: number;
+  lembreteOffsetMinutos: number;
   criadoEm: string;
   concluidoEm: string | null;
   atualizadoEm: string;
@@ -37,7 +37,7 @@ interface ItemRow {
   categoria: string;
   status: string;
   recorrencia: string;
-  lembrete_offset_dias: number;
+  lembrete_offset_minutos: number;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -102,7 +102,7 @@ function rowParaApi(row: ItemRow): ItemApi {
     categoria: row.categoria,
     status: row.status,
     recorrencia: row.recorrencia,
-    lembreteOffsetDias: row.lembrete_offset_dias,
+    lembreteOffsetMinutos: row.lembrete_offset_minutos,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -196,7 +196,7 @@ async function upsertComLWW(
     .prepare(
       `INSERT INTO items (
         id, texto_original, titulo, data, hora_compromisso, hora_limite,
-        tipo_horario, categoria, status, recorrencia, lembrete_offset_dias,
+        tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos,
         criado_em, concluido_em, atualizado_em, excluido, usuario_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
@@ -209,7 +209,7 @@ async function upsertComLWW(
         categoria = excluded.categoria,
         status = excluded.status,
         recorrencia = excluded.recorrencia,
-        lembrete_offset_dias = excluded.lembrete_offset_dias,
+        lembrete_offset_minutos = excluded.lembrete_offset_minutos,
         concluido_em = excluded.concluido_em,
         atualizado_em = excluded.atualizado_em,
         excluido = excluded.excluido
@@ -226,7 +226,7 @@ async function upsertComLWW(
       item.categoria,
       item.status,
       item.recorrencia,
-      item.lembreteOffsetDias,
+      item.lembreteOffsetMinutos,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,

@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS items (
   categoria TEXT NOT NULL DEFAULT 'outro',
   status TEXT NOT NULL DEFAULT 'pendente',
   recorrencia TEXT NOT NULL DEFAULT 'nenhuma',
-  lembrete_offset_dias INTEGER NOT NULL DEFAULT 0,
+  lembrete_offset_dias INTEGER NOT NULL DEFAULT 0, -- legado, ver migration 0004 (lembrete_offset_minutos)
+  lembrete_offset_minutos INTEGER NOT NULL DEFAULT 0,
   criado_em TEXT NOT NULL,
   concluido_em TEXT,
   atualizado_em TEXT NOT NULL,

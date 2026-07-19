@@ -54,7 +54,6 @@ export function LoginScreen() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Image source={require('../../assets/icon.png')} style={styles.logo} />
-        <Text style={styles.titulo}>AVIA</Text>
         <Text style={styles.subtitulo}>{modoCadastro ? 'Criar conta' : 'Entrar'}</Text>
 
         {modoCadastro && (
@@ -124,9 +123,8 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: 24, paddingTop: 72, alignItems: 'center' },
-  logo: { width: 72, height: 72, borderRadius: 16, marginBottom: 12 },
-  titulo: { fontFamily: fonts.extraBold, fontSize: 28, color: colors.textPrimary },
+  scroll: { padding: 24, paddingTop: 32, alignItems: 'center' },
+  logo: { width: 288, height: 288, borderRadius: 48, marginBottom: 12 },
   subtitulo: { fontFamily: fonts.medium, fontSize: 15, color: colors.textSecondary, marginBottom: 24 },
   input: {
     width: '100%',

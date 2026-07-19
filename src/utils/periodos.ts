@@ -40,6 +40,12 @@ export function itensPendentesHoje(itens: Item[]): Item[] {
   return itensDoPeriodo(itens, 'hoje');
 }
 
+export function itensConcluidosOrdenados(itens: Item[]): Item[] {
+  return itens
+    .filter((item) => item.status === 'feito' && item.concluidoEm)
+    .sort((a, b) => (b.concluidoEm as string).localeCompare(a.concluidoEm as string));
+}
+
 export function agruparPorCategoria(itens: Item[]): Map<Item['categoria'], Item[]> {
   const grupos = new Map<Item['categoria'], Item[]>();
   for (const item of itens) {

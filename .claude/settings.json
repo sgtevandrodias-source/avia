@@ -10,7 +10,12 @@
       "Bash(node check_datetime.js)",
       "Bash(npx --yes serve -l 5561 dist)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5561/)",
-      "Bash(node check_greeting.js)"
+      "Bash(node check_greeting.js)",
+      "Bash(openssl version *)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(JSON.stringify\\({status:j.status, artifactUrl:j.artifacts.buildUrl},null,2\\)\\)}\\)\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\Evandro\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Evandro-Documents-MeusApps-Avia\\\\ce1ee760-7eb9-4723-bfc3-345c23df0e58\\\\scratchpad\\\\apk\")",
+      "Bash(curl -sL -o avia.apk \"https://expo.dev/artifacts/eas/rwexE0uz9e10bX-vZxCbDiKh4-jXTurKV-VxDlmL1KY.apk\")",
+      "Bash(unzip -o -q avia.apk -d extracted \"META-INF/*\")"
     ]
   },
   "enabledPlugins": {

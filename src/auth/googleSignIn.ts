@@ -19,6 +19,10 @@ export async function loginComGoogleNativo(): Promise<string | null> {
     configurado = true;
   }
   await GoogleSignin.hasPlayServices();
+  // Sem isso, o Google reloga direto com a última conta usada, sem
+  // mostrar o seletor — forçamos o "esquecimento" da sessão antes de
+  // pedir login de novo, garantindo que o seletor de conta apareça.
+  await GoogleSignin.signOut().catch(() => {});
   const resposta = await GoogleSignin.signIn();
   if (isSuccessResponse(resposta)) {
     return resposta.data.idToken;

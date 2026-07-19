@@ -99,17 +99,17 @@ const styles = StyleSheet.create({
   saudacaoLinha: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: 10,
+    marginBottom: 8,
   },
   logoSaudacao: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
   },
   saudacaoTexto: {
     fontFamily: fonts.extraBold,
-    fontSize: 18,
+    fontSize: 26,
     color: colors.textPrimary,
   },
   lista: {

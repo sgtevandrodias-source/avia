@@ -23,6 +23,21 @@ const DIAS_SEMANA: Record<string, number> = {
   sabado: 6,
 };
 
+const MESES: Record<string, number> = {
+  janeiro: 0,
+  fevereiro: 1,
+  marco: 2,
+  abril: 3,
+  maio: 4,
+  junho: 5,
+  julho: 6,
+  agosto: 7,
+  setembro: 8,
+  outubro: 9,
+  novembro: 10,
+  dezembro: 11,
+};
+
 const NUMEROS_EXTENSO: Record<string, number> = {
   um: 1,
   uma: 1,
@@ -97,6 +112,21 @@ function detectarData(textoOriginal: string, agora: Date): DeteccaoData | null {
   const matchMesQueVem = textoSemAcento.match(/m[eê]s\s+que\s+vem/);
   if (matchMesQueVem) {
     return { data: addMonths(agora, 1), trecho: matchMesQueVem[0] };
+  }
+
+  // "dia 22 de julho", "22 de julho", "7 de agosto", "10 agosto" (sem "de") —
+  // checado antes de "dia 25" pra não truncar o número perdendo o mês por extenso.
+  const matchDiaComMes = textoSemAcento.match(
+    /\b(?:dia\s+)?(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/,
+  );
+  if (matchDiaComMes) {
+    const dia = parseInt(matchDiaComMes[1], 10);
+    const mes = MESES[matchDiaComMes[2]];
+    let data = new Date(agora.getFullYear(), mes, dia);
+    if (data < agora && data.toDateString() !== agora.toDateString()) {
+      data = new Date(agora.getFullYear() + 1, mes, dia);
+    }
+    return { data, trecho: matchDiaComMes[0] };
   }
 
   // "dia 25" (dia do mês atual, rolando pro mês seguinte se já passou)
@@ -244,7 +274,13 @@ function limparTitulo(textoOriginal: string, trechos: string[]): string {
       titulo = titulo.slice(0, idx) + ' ' + titulo.slice(idx + trecho.length);
     }
   }
-  titulo = titulo.replace(/\s+/g, ' ').trim();
+  // Remove pontuação órfã deixada pelos trechos removidos (ex.: "escola, , às 19h" → "escola,").
+  titulo = titulo
+    .replace(/\s+/g, ' ')
+    .replace(/\s*,(\s*,)+/g, ',')
+    .replace(/\s+,/g, ',')
+    .replace(/^[\s,]+|[\s,]+$/g, '')
+    .trim();
   if (!titulo) titulo = textoOriginal.trim();
   return titulo.charAt(0).toUpperCase() + titulo.slice(1);
 }
@@ -285,7 +321,7 @@ export function parseItem(textoOriginal: string, agora: Date = new Date()): Resu
     tipoHorario: deteccaoHorario?.tipoHorario ?? 'nenhum',
     categoria,
     recorrencia,
-    lembreteOffsetDias: 0,
+    lembreteOffsetMinutos: 0,
   };
 
   return { item, trechosReconhecidos: trechosReconhecidos.filter(Boolean) };

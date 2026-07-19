@@ -18,7 +18,14 @@ import { useCategorias } from '../context/CategoriasContext';
 import { SeletorHora } from '../components/SeletorHora';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
-import { type Categoria, type Item, type NovoItem, type Recorrencia, type TipoHorario } from '../types/item';
+import {
+  PRESETS_LEMBRETE,
+  type Categoria,
+  type Item,
+  type NovoItem,
+  type Recorrencia,
+  type TipoHorario,
+} from '../types/item';
 import { avisar, confirmar } from '../utils/confirm';
 
 const TIPOS_HORARIO: { valor: TipoHorario; label: string }[] = [
@@ -64,7 +71,7 @@ export function ItemDetailScreen() {
   const [horaLimite, setHoraLimite] = useState(base.horaLimite ?? '');
   const [categoria, setCategoria] = useState<Categoria>(base.categoria ?? 'outro');
   const [recorrencia, setRecorrencia] = useState<Recorrencia>(base.recorrencia ?? 'nenhuma');
-  const [lembreteOffsetDias, setLembreteOffsetDias] = useState(String(base.lembreteOffsetDias ?? 0));
+  const [lembreteOffsetMinutos, setLembreteOffsetMinutos] = useState(base.lembreteOffsetMinutos ?? 0);
   const [status, setStatus] = useState(base.status ?? 'pendente');
   const [mostrarCalendario, setMostrarCalendario] = useState(false);
   const [seletorHoraAberto, setSeletorHoraAberto] = useState<'compromisso' | 'prazo' | null>(null);
@@ -88,7 +95,7 @@ export function ItemDetailScreen() {
       horaLimite: tipoHorario === 'prazo' ? horaLimite || null : null,
       categoria,
       recorrencia,
-      lembreteOffsetDias: parseInt(lembreteOffsetDias, 10) || 0,
+      lembreteOffsetMinutos,
     };
 
     if (ehNovo) {
@@ -229,13 +236,22 @@ export function ItemDetailScreen() {
             ))}
           </View>
 
-          <Text style={styles.label}>Lembrar quantos dias antes?</Text>
-          <TextInput
-            style={styles.input}
-            value={lembreteOffsetDias}
-            onChangeText={setLembreteOffsetDias}
-            keyboardType="number-pad"
-          />
+          <Text style={styles.label}>Lembrar</Text>
+          <View style={styles.linhaChips}>
+            {PRESETS_LEMBRETE.map((preset) => (
+              <Pressable
+                key={preset.minutos}
+                style={[styles.chip, lembreteOffsetMinutos === preset.minutos && styles.chipAtivo]}
+                onPress={() => setLembreteOffsetMinutos(preset.minutos)}
+              >
+                <Text
+                  style={[styles.chipTexto, lembreteOffsetMinutos === preset.minutos && styles.chipTextoAtivo]}
+                >
+                  {preset.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
 
           {!ehNovo && (
             <Pressable
