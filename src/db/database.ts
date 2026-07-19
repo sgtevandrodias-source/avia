@@ -385,3 +385,21 @@ export async function removerExclusaoPendenteCategoria(id: string): Promise<void
   const db = await getDb();
   await db.runAsync('DELETE FROM exclusoes_pendentes_categorias WHERE id = ?', [id]);
 }
+
+// ---- Isolamento entre contas (o SQLite local é único por aparelho, não por usuário) ----
+
+/**
+ * Apaga todos os dados locais (items, categorias e filas de exclusão
+ * pendente). Usado quando o usuário logado muda pra outro diferente do
+ * último — sem isso, dados de uma conta ficariam visíveis/misturados
+ * na próxima conta que logar no mesmo aparelho.
+ */
+export async function limparTudoLocal(): Promise<void> {
+  const db = await getDb();
+  await db.execAsync(`
+    DELETE FROM items;
+    DELETE FROM categorias;
+    DELETE FROM exclusoes_pendentes;
+    DELETE FROM exclusoes_pendentes_categorias;
+  `);
+}

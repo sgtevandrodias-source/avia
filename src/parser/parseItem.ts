@@ -25,18 +25,33 @@ const DIAS_SEMANA: Record<string, number> = {
 
 const MESES: Record<string, number> = {
   janeiro: 0,
+  jan: 0,
   fevereiro: 1,
+  fev: 1,
   marco: 2,
+  mar: 2,
   abril: 3,
+  abr: 3,
   maio: 4,
+  mai: 4,
   junho: 5,
+  jun: 5,
   julho: 6,
+  jul: 6,
   agosto: 7,
+  ago: 7,
   setembro: 8,
+  set: 8,
   outubro: 9,
+  out: 9,
   novembro: 10,
+  nov: 10,
   dezembro: 11,
+  dez: 11,
 };
+
+const NOMES_MESES_REGEX =
+  'janeiro|jan|fevereiro|fev|marco|mar|abril|abr|maio|mai|junho|jun|julho|jul|agosto|ago|setembro|set|outubro|out|novembro|nov|dezembro|dez';
 
 const NUMEROS_EXTENSO: Record<string, number> = {
   um: 1,
@@ -114,16 +129,20 @@ function detectarData(textoOriginal: string, agora: Date): DeteccaoData | null {
     return { data: addMonths(agora, 1), trecho: matchMesQueVem[0] };
   }
 
-  // "dia 22 de julho", "22 de julho", "7 de agosto", "10 agosto" (sem "de") —
-  // checado antes de "dia 25" pra não truncar o número perdendo o mês por extenso.
+  // "dia 22 de julho", "22 de jul", "7 de agosto de 2026", "10 agosto" (sem "de"),
+  // com mês abreviado ou por extenso e ano opcional — checado antes de "dia 25"
+  // pra não truncar o número perdendo o mês por extenso.
   const matchDiaComMes = textoSemAcento.match(
-    /\b(?:dia\s+)?(\d{1,2})\s+(?:de\s+)?(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/,
+    new RegExp(
+      `\\b(?:dia\\s+)?(\\d{1,2})\\s+(?:de\\s+)?(${NOMES_MESES_REGEX})\\b(?:\\s+de\\s+(\\d{4}))?`,
+    ),
   );
   if (matchDiaComMes) {
     const dia = parseInt(matchDiaComMes[1], 10);
     const mes = MESES[matchDiaComMes[2]];
-    let data = new Date(agora.getFullYear(), mes, dia);
-    if (data < agora && data.toDateString() !== agora.toDateString()) {
+    const anoExplicito = matchDiaComMes[3] ? parseInt(matchDiaComMes[3], 10) : null;
+    let data = new Date(anoExplicito ?? agora.getFullYear(), mes, dia);
+    if (!anoExplicito && data < agora && data.toDateString() !== agora.toDateString()) {
       data = new Date(agora.getFullYear() + 1, mes, dia);
     }
     return { data, trecho: matchDiaComMes[0] };
@@ -199,9 +218,9 @@ function detectarHorario(textoOriginal: string): DeteccaoHorario | null {
     return { tipoHorario: 'dia_todo', hora: '', trecho: matchDiaTodo[0] };
   }
 
-  // "até as 18h", "até às 18:30", "até 18h", "até 18"
+  // "até as 18h", "até às 18:30", "até 18h", "até 18", "até 12 horas"
   const matchPrazo = textoSemAcento.match(
-    /\bate\s+(?:as\s+|a\s+)?(\d{1,2})(?:[:h](\d{2}))?h?\s*(da\s+manh[aã]|da\s+tarde|da\s+noite)?/,
+    /\bate\s+(?:as\s+|a\s+)?(\d{1,2})(?:[:h](\d{2}))?(?:\s*h\b|\s+horas?\b)?\s*(da\s+manh[aã]|da\s+tarde|da\s+noite)?/,
   );
   if (matchPrazo) {
     return {
@@ -211,9 +230,9 @@ function detectarHorario(textoOriginal: string): DeteccaoHorario | null {
     };
   }
 
-  // "as 15h", "às 15:30", "as 15"
+  // "as 15h", "às 15:30", "as 15", "às 15 horas"
   const matchCompromisso = textoSemAcento.match(
-    /\b[aà]s\s+(\d{1,2})(?:[:h](\d{2}))?h?\s*(da\s+manh[aã]|da\s+tarde|da\s+noite)?/,
+    /\b[aà]s\s+(\d{1,2})(?:[:h](\d{2}))?(?:\s*h\b|\s+horas?\b)?\s*(da\s+manh[aã]|da\s+tarde|da\s+noite)?/,
   );
   if (matchCompromisso) {
     return {
@@ -236,7 +255,23 @@ const PALAVRAS_CATEGORIA: { categoria: Categoria; palavras: string[] }[] = [
     categoria: 'aniversario',
     palavras: ['aniversario', 'aniversário', 'parabenizar', 'felicitar', 'presente de aniversario', 'presente de aniversário'],
   },
-  { categoria: 'trabalho', palavras: ['reuniao', 'reunião', 'call', 'entregar', 'relatorio', 'relatório', 'apresentacao', 'apresentação'] },
+  {
+    categoria: 'trabalho',
+    palavras: [
+      'reuniao',
+      'reunião',
+      'call',
+      'entregar',
+      'relatorio',
+      'relatório',
+      'apresentacao',
+      'apresentação',
+      'trabalho',
+      'escritorio',
+      'escritório',
+      'expediente',
+    ],
+  },
   { categoria: 'saude', palavras: ['medico', 'médico', 'consulta', 'exame', 'dentista'] },
 ];
 

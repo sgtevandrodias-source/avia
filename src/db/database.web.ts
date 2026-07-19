@@ -106,3 +106,7 @@ export async function listarExclusoesPendentesCategorias(): Promise<string[]> {
   return [];
 }
 export async function removerExclusaoPendenteCategoria(): Promise<void> {}
+
+// Build web: nunca teve cache local (cada operação já fala direto com a
+// API, escopada pelo token do usuário logado) — nada pra limpar.
+export async function limparTudoLocal(): Promise<void> {}

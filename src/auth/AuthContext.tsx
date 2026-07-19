@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { API_URL } from '../sync/config';
-import { forcarResyncCompleto } from '../sync/sync';
+import { prepararSessaoParaUsuario } from '../sync/sync';
 import { googleDisponivel, loginComGoogleNativo } from './googleSignIn';
 import { definirTokenAtual } from './sessionToken';
 import { lerSessao, limparSessao, salvarSessao } from './tokenStorage';
@@ -67,9 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await salvarSessao(JSON.stringify(sessao));
     definirTokenAtual(sessao.token);
     // Sessao nova (login/cadastro) — pode ser outro usuario no mesmo
-    // aparelho, entao força um pull/push completo em vez de usar o
-    // checkpoint de sincronização de quem estava logado antes.
-    await forcarResyncCompleto();
+    // aparelho: se for, apaga os dados locais da conta anterior antes de
+    // puxar os dados da conta atual (senão os itens ficam misturados).
+    await prepararSessaoParaUsuario(sessao.usuario.id);
     setToken(sessao.token);
     setUsuario(sessao.usuario);
   }, []);

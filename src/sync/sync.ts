@@ -5,6 +5,7 @@ import type { CategoriaItem, Item } from '../types/item';
 
 const CHAVE_ULTIMA_SYNC = 'ultimaSincronizacao';
 const CHAVE_ULTIMA_SYNC_CATEGORIAS = 'ultimaSincronizacaoCategorias';
+const CHAVE_ULTIMO_USUARIO = 'ultimoUsuarioId';
 const TIMEOUT_MS = 8000;
 
 interface ItemRemoto extends Item {
@@ -141,4 +142,20 @@ export async function sincronizar(): Promise<{ ok: boolean }> {
 export async function forcarResyncCompleto(): Promise<void> {
   await db.setMeta(CHAVE_ULTIMA_SYNC, '');
   await db.setMeta(CHAVE_ULTIMA_SYNC_CATEGORIAS, '');
+}
+
+/**
+ * Prepara o SQLite local pra uma sessão que acabou de logar. O aparelho
+ * pode ter dados de OUTRA conta salvos localmente (login/logout entre
+ * contas diferentes no mesmo aparelho) — se o usuário mudou desde a
+ * última vez, apaga tudo antes de puxar os dados da conta atual, senão
+ * os dois usuários veriam os itens um do outro misturados.
+ */
+export async function prepararSessaoParaUsuario(usuarioId: string): Promise<void> {
+  const ultimoUsuario = await db.getMeta(CHAVE_ULTIMO_USUARIO);
+  if (ultimoUsuario && ultimoUsuario !== usuarioId) {
+    await db.limparTudoLocal();
+  }
+  await db.setMeta(CHAVE_ULTIMO_USUARIO, usuarioId);
+  await forcarResyncCompleto();
 }
