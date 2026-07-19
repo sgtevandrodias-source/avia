@@ -34,7 +34,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "deploy:web": "expo export --platform web && wrangler pages deploy dist --project-name=avia"
+    "deploy:web": "expo export --platform web && wrangler pages deploy dist --project-name=avia --branch=main"
   },
   "private": true
 }
