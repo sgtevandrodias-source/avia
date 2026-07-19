@@ -46,7 +46,7 @@ export function CapturaRapida() {
     setOuvindo(false);
     const transcricaoFinal = transcricaoRef.current.trim();
     if (transcricaoFinal) {
-      setResultado(parseItem(transcricaoFinal));
+      setResultado(parseItem(transcricaoFinal, categorias));
     }
   });
 
@@ -65,7 +65,7 @@ export function CapturaRapida() {
 
   const lidarComSubmit = () => {
     if (!texto.trim()) return;
-    setResultado(parseItem(texto));
+    setResultado(parseItem(texto, categorias));
   };
 
   const alternarDitado = async () => {
@@ -114,7 +114,9 @@ export function CapturaRapida() {
         ? `às ${resultado.item.horaCompromisso}`
         : resultado.item.tipoHorario === 'prazo'
           ? `até ${resultado.item.horaLimite}`
-          : null;
+          : resultado.item.tipoHorario === 'dia_todo'
+            ? 'dia todo'
+            : null;
 
     return (
       <View style={styles.previewCard}>

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { format, parseISO } from 'date-fns';
 import { CheckboxConcluir } from './CheckboxConcluir';
 import { useCategorias } from '../context/CategoriasContext';
 import { colors } from '../theme/colors';
@@ -27,12 +28,15 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
 
   const { categorias } = useCategorias();
   const categoria = categoriaInfo(categorias, item.categoria);
-  const horario =
+  const dataFormatada = format(parseISO(item.data), 'dd/MM');
+  const indicadorHorario =
     item.tipoHorario === 'compromisso'
-      ? item.horaCompromisso
+      ? `🕒 ${item.horaCompromisso}`
       : item.tipoHorario === 'prazo'
         ? `até ${item.horaLimite}`
-        : null;
+        : item.tipoHorario === 'dia_todo'
+          ? 'Dia todo'
+          : null;
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
@@ -48,7 +52,8 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           <Text style={styles.categoria}>
             {categoria.icone} {categoria.nome}
           </Text>
-          {horario && <Text style={styles.horario}>{horario}</Text>}
+          <Text style={styles.horario}>{dataFormatada}</Text>
+          {indicadorHorario && <Text style={styles.horario}>{indicadorHorario}</Text>}
         </View>
       </Animated.View>
     </Pressable>
@@ -81,6 +86,7 @@ const styles = StyleSheet.create({
   },
   linhaMeta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: 4,
     gap: 10,
   },

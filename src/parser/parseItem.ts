@@ -1,5 +1,5 @@
 import { addDays, addMonths, format, setDate } from 'date-fns';
-import type { Categoria, NovoItem, Recorrencia, TipoHorario } from '../types/item';
+import type { Categoria, CategoriaItem, NovoItem, Recorrencia, TipoHorario } from '../types/item';
 
 export interface ResultadoParse {
   item: NovoItem;
@@ -288,6 +288,43 @@ function detectarCategoria(textoOriginal: string): DeteccaoCategoria {
   return { categoria: 'outro', trecho: '' };
 }
 
+/**
+ * Reconhece o padrão "categoria, tarefa, dia, horário" (jeito do usuário
+ * ditar por voz): olha só o começo da frase em busca do nome de uma
+ * categoria do usuário (comparação sem acento/maiúsculas). Tem prioridade
+ * sobre `detectarCategoria` (palavra-chave solta em qualquer lugar do
+ * texto) — só usada como fallback quando isso aqui não acha nada.
+ */
+function detectarCategoriaFalada(
+  textoOriginal: string,
+  categorias: CategoriaItem[],
+): { categoriaId: string; trecho: string } | null {
+  const textoTrimado = textoOriginal.trim();
+  const textoSemAcento = removerAcentosLeve(textoTrimado.toLowerCase());
+
+  let melhor: { categoriaId: string; tamanhoNome: number } | null = null;
+  for (const cat of categorias) {
+    const nomeSemAcento = removerAcentosLeve(cat.nome.toLowerCase());
+    if (!nomeSemAcento) continue;
+    if (!textoSemAcento.startsWith(nomeSemAcento)) continue;
+
+    const proximoChar = textoSemAcento[nomeSemAcento.length];
+    const limiteOk = proximoChar === undefined || /[\s,]/.test(proximoChar);
+    if (limiteOk && (!melhor || nomeSemAcento.length > melhor.tamanhoNome)) {
+      melhor = { categoriaId: cat.id, tamanhoNome: nomeSemAcento.length };
+    }
+  }
+
+  if (!melhor) return null;
+
+  // Consome a pontuação/pausa logo depois do nome ("trabalho, " ou "trabalho ")
+  // pra não sobrar vírgula órfã no título.
+  let fim = melhor.tamanhoNome;
+  while (fim < textoSemAcento.length && /[\s,]/.test(textoSemAcento[fim])) fim++;
+
+  return { categoriaId: melhor.categoriaId, trecho: textoTrimado.slice(0, fim) };
+}
+
 function detectarRecorrencia(textoOriginal: string): Recorrencia {
   const textoSemAcento = removerAcentosLeve(normalizar(textoOriginal));
   if (/aniversario/.test(textoSemAcento) || /todo\s+ano/.test(textoSemAcento)) {
@@ -323,8 +360,17 @@ function limparTitulo(textoOriginal: string, trechos: string[]): string {
 /**
  * Parser de linguagem natural PT-BR. Função pura: nunca lança erro,
  * sempre retorna um item utilizável (fallback: hoje / categoria "outro").
+ *
+ * `categorias` é a lista do usuário logado (ver CategoriasContext) — usada
+ * pra reconhecer o padrão falado "categoria, tarefa, dia, horário" (nome da
+ * categoria ditado no começo da frase). Tem prioridade sobre a detecção por
+ * palavra-chave solta (usada como fallback pra texto digitado livre).
  */
-export function parseItem(textoOriginal: string, agora: Date = new Date()): ResultadoParse {
+export function parseItem(
+  textoOriginal: string,
+  categorias: CategoriaItem[],
+  agora: Date = new Date(),
+): ResultadoParse {
   const trechosReconhecidos: string[] = [];
 
   const deteccaoData = detectarData(textoOriginal, agora);
@@ -334,29 +380,44 @@ export function parseItem(textoOriginal: string, agora: Date = new Date()): Resu
   const deteccaoHorario = detectarHorario(textoOriginal);
   if (deteccaoHorario) trechosReconhecidos.push(deteccaoHorario.trecho);
 
-  const deteccaoCategoria = detectarCategoria(textoOriginal);
-  if (deteccaoCategoria.trecho) trechosReconhecidos.push(deteccaoCategoria.trecho);
+  const categoriaFalada = detectarCategoriaFalada(textoOriginal, categorias);
+  let categoria: Categoria;
+  let trechoCategoriaFalada: string | null = null;
+  if (categoriaFalada) {
+    categoria = categoriaFalada.categoriaId;
+    trechoCategoriaFalada = categoriaFalada.trecho;
+    trechosReconhecidos.push(trechoCategoriaFalada);
+  } else {
+    const deteccaoCategoria = detectarCategoria(textoOriginal);
+    if (deteccaoCategoria.trecho) trechosReconhecidos.push(deteccaoCategoria.trecho);
+    categoria = deteccaoCategoria.categoria;
+  }
 
   const recorrencia = detectarRecorrencia(textoOriginal);
-  const categoria: Categoria = deteccaoCategoria.categoria;
 
-  // Só removemos data/hora do título — a palavra-chave de categoria costuma
+  // Removemos data/hora do título sempre, e a categoria falada no início
+  // também (ex.: "trabalho, entregar relatório" → título "Entregar
+  // relatório") — mas não a palavra-chave solta do fallback, que costuma
   // ser o próprio assunto (ex.: "reunião amanhã às 15h" → título "Reunião").
-  const trechosParaTitulo = [deteccaoData?.trecho, deteccaoHorario?.trecho].filter(
+  const trechosParaTitulo = [trechoCategoriaFalada, deteccaoData?.trecho, deteccaoHorario?.trecho].filter(
     (t): t is string => !!t,
   );
   const titulo = limparTitulo(textoOriginal, trechosParaTitulo);
+
+  const tipoHorario = deteccaoHorario?.tipoHorario ?? 'nenhum';
 
   const item: NovoItem = {
     textoOriginal,
     titulo,
     data: format(data, 'yyyy-MM-dd'),
-    horaCompromisso: deteccaoHorario?.tipoHorario === 'compromisso' ? deteccaoHorario.hora : null,
-    horaLimite: deteccaoHorario?.tipoHorario === 'prazo' ? deteccaoHorario.hora : null,
-    tipoHorario: deteccaoHorario?.tipoHorario ?? 'nenhum',
+    horaCompromisso: tipoHorario === 'compromisso' ? deteccaoHorario!.hora : null,
+    horaLimite: tipoHorario === 'prazo' ? deteccaoHorario!.hora : null,
+    tipoHorario,
     categoria,
     recorrencia,
-    lembreteOffsetMinutos: 0,
+    // Item com horário específico já sai com lembrete de 30 min de antecedência
+    // por padrão — dá pra ajustar depois no seletor "Lembrar".
+    lembreteOffsetMinutos: tipoHorario === 'compromisso' || tipoHorario === 'prazo' ? 30 : 0,
   };
 
   return { item, trechosReconhecidos: trechosReconhecidos.filter(Boolean) };

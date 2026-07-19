@@ -8,7 +8,7 @@ export type Categoria = string;
 
 export type Status = 'pendente' | 'feito';
 
-export type Recorrencia = 'nenhuma' | 'anual' | 'mensal' | 'semanal';
+export type Recorrencia = 'nenhuma' | 'anual' | 'mensal' | 'semanal' | 'diaria';
 
 export interface Item {
   id: string;

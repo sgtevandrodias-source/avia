@@ -37,6 +37,7 @@ const TIPOS_HORARIO: { valor: TipoHorario; label: string }[] = [
 
 const RECORRENCIAS: { valor: Recorrencia; label: string }[] = [
   { valor: 'nenhuma', label: 'Não repete' },
+  { valor: 'diaria', label: 'Diária' },
   { valor: 'semanal', label: 'Semanal' },
   { valor: 'mensal', label: 'Mensal' },
   { valor: 'anual', label: 'Anual' },
@@ -168,7 +169,14 @@ export function ItemDetailScreen() {
               <Pressable
                 key={tipo.valor}
                 style={[styles.chip, tipoHorario === tipo.valor && styles.chipAtivo]}
-                onPress={() => setTipoHorario(tipo.valor)}
+                onPress={() => {
+                  setTipoHorario(tipo.valor);
+                  // Item novo com horário específico: sugere 30 min de lembrete,
+                  // mas só se o usuário ainda não tiver ajustado esse valor na mão.
+                  if (ehNovo && lembreteOffsetMinutos === 0 && (tipo.valor === 'compromisso' || tipo.valor === 'prazo')) {
+                    setLembreteOffsetMinutos(30);
+                  }
+                }}
               >
                 <Text style={[styles.chipTexto, tipoHorario === tipo.valor && styles.chipTextoAtivo]}>
                   {tipo.label}

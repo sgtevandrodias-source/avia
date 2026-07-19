@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -6,11 +6,14 @@ import { HojeScreen } from '../screens/HojeScreen';
 import { AmanhaScreen } from '../screens/AmanhaScreen';
 import { QuinzenaScreen } from '../screens/QuinzenaScreen';
 import { MesScreen } from '../screens/MesScreen';
+import { AtrasadosScreen } from '../screens/AtrasadosScreen';
 import { HistoricoScreen } from '../screens/HistoricoScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
+import { useItems } from '../context/ItemsContext';
 import { colors, corPorPeriodo } from '../theme/colors';
 import { fonts } from '../theme/typography';
+import { itensAtrasados } from '../utils/periodos';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -20,11 +23,15 @@ const ICONES_ABA: Record<string, string> = {
   Amanha: '➡️',
   Quinzena: '🗓️',
   Mes: '📆',
+  Atrasados: '⏰',
   Historico: '✅',
   Config: '⚙️',
 };
 
 function Tabs() {
+  const { itens } = useItems();
+  const quantidadeAtrasados = useMemo(() => itensAtrasados(itens).length, [itens]);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -32,6 +39,7 @@ function Tabs() {
         tabBarActiveTintColor: corPorPeriodo.hoje,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarLabelStyle: { fontFamily: fonts.medium, fontSize: 11 },
+        tabBarBadgeStyle: { backgroundColor: colors.danger },
         tabBarIcon: () => <Text style={{ fontSize: 18 }}>{ICONES_ABA[route.name]}</Text>,
       })}
     >
@@ -39,6 +47,11 @@ function Tabs() {
       <Tab.Screen name="Amanha" component={AmanhaScreen} options={{ title: 'Amanhã' }} />
       <Tab.Screen name="Quinzena" component={QuinzenaScreen} options={{ title: '15 dias' }} />
       <Tab.Screen name="Mes" component={MesScreen} options={{ title: 'Mês' }} />
+      <Tab.Screen
+        name="Atrasados"
+        component={AtrasadosScreen}
+        options={{ title: 'Atrasados', tabBarBadge: quantidadeAtrasados > 0 ? quantidadeAtrasados : undefined }}
+      />
       <Tab.Screen name="Historico" component={HistoricoScreen} options={{ title: 'Feitos' }} />
       <Tab.Screen name="Config" component={SettingsScreen} options={{ title: 'Config' }} />
     </Tab.Navigator>
