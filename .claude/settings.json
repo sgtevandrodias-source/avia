@@ -1,10 +1,16 @@
 {
-  "enabledPlugins": {
-    "expo@claude-plugins-official": true
-  },
   "permissions": {
     "allow": [
-      "Bash(npx --yes tsx _tmp_test_parser.ts)"
+      "Bash(npx --yes tsx _tmp_test_parser.ts)",
+      "Bash(npx --yes serve -l 5559 dist)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5559/)",
+      "Bash(node check_diatodo.js)",
+      "Bash(npx --yes serve -l 5560 dist)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5560/)",
+      "Bash(node check_datetime.js)"
     ]
+  },
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true
   }
 }

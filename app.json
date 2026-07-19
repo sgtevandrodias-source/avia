@@ -49,7 +49,8 @@
           "microphonePermission": "O AVIA usa o microfone para transformar sua fala em um item.",
           "speechRecognitionPermission": "O AVIA usa o reconhecimento de fala para transformar sua fala em um item."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

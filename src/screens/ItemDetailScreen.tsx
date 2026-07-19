@@ -12,8 +12,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { format, parse } from 'date-fns';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
+import { SeletorHora } from '../components/SeletorHora';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { type Categoria, type Item, type NovoItem, type Recorrencia, type TipoHorario } from '../types/item';
@@ -64,6 +66,8 @@ export function ItemDetailScreen() {
   const [recorrencia, setRecorrencia] = useState<Recorrencia>(base.recorrencia ?? 'nenhuma');
   const [lembreteOffsetDias, setLembreteOffsetDias] = useState(String(base.lembreteOffsetDias ?? 0));
   const [status, setStatus] = useState(base.status ?? 'pendente');
+  const [mostrarCalendario, setMostrarCalendario] = useState(false);
+  const [seletorHoraAberto, setSeletorHoraAberto] = useState<'compromisso' | 'prazo' | null>(null);
 
   const salvar = async () => {
     if (!titulo.trim()) {
@@ -121,14 +125,35 @@ export function ItemDetailScreen() {
           <Text style={styles.label}>Título</Text>
           <TextInput style={styles.input} value={titulo} onChangeText={setTitulo} placeholder="Título" />
 
-          <Text style={styles.label}>Data (dd/MM/yyyy)</Text>
-          <TextInput
-            style={styles.input}
-            value={dataTexto}
-            onChangeText={setDataTexto}
-            placeholder="dd/MM/yyyy"
-            keyboardType="numbers-and-punctuation"
-          />
+          <Text style={styles.label}>Data</Text>
+          {Platform.OS === 'web' ? (
+            <TextInput
+              style={styles.input}
+              value={dataTexto}
+              onChangeText={setDataTexto}
+              placeholder="dd/MM/yyyy"
+              keyboardType="numbers-and-punctuation"
+            />
+          ) : (
+            <Pressable style={styles.input} onPress={() => setMostrarCalendario(true)}>
+              <Text style={styles.inputTexto}>{dataTexto || 'Selecionar data'}</Text>
+            </Pressable>
+          )}
+          {mostrarCalendario && (
+            <DateTimePicker
+              value={
+                dataTexto && !isNaN(parse(dataTexto, 'dd/MM/yyyy', new Date()).getTime())
+                  ? parse(dataTexto, 'dd/MM/yyyy', new Date())
+                  : new Date()
+              }
+              mode="date"
+              display="calendar"
+              onChange={(_evento, dataSelecionada) => {
+                setMostrarCalendario(false);
+                if (dataSelecionada) setDataTexto(format(dataSelecionada, 'dd/MM/yyyy'));
+              }}
+            />
+          )}
 
           <Text style={styles.label}>Horário</Text>
           <View style={styles.linhaChips}>
@@ -147,26 +172,32 @@ export function ItemDetailScreen() {
 
           {tipoHorario === 'compromisso' && (
             <>
-              <Text style={styles.label}>Hora do compromisso (HH:mm)</Text>
-              <TextInput
-                style={styles.input}
-                value={horaCompromisso}
-                onChangeText={setHoraCompromisso}
-                placeholder="15:00"
-              />
+              <Text style={styles.label}>Hora do compromisso</Text>
+              <Pressable style={styles.input} onPress={() => setSeletorHoraAberto('compromisso')}>
+                <Text style={styles.inputTexto}>{horaCompromisso || 'Selecionar horário'}</Text>
+              </Pressable>
             </>
           )}
           {tipoHorario === 'prazo' && (
             <>
-              <Text style={styles.label}>Hora limite (HH:mm)</Text>
-              <TextInput
-                style={styles.input}
-                value={horaLimite}
-                onChangeText={setHoraLimite}
-                placeholder="18:00"
-              />
+              <Text style={styles.label}>Hora limite</Text>
+              <Pressable style={styles.input} onPress={() => setSeletorHoraAberto('prazo')}>
+                <Text style={styles.inputTexto}>{horaLimite || 'Selecionar horário'}</Text>
+              </Pressable>
             </>
           )}
+          <SeletorHora
+            visivel={seletorHoraAberto === 'compromisso'}
+            valorAtual={horaCompromisso}
+            onSelecionar={setHoraCompromisso}
+            onFechar={() => setSeletorHoraAberto(null)}
+          />
+          <SeletorHora
+            visivel={seletorHoraAberto === 'prazo'}
+            valorAtual={horaLimite}
+            onSelecionar={setHoraLimite}
+            onFechar={() => setSeletorHoraAberto(null)}
+          />
 
           <Text style={styles.label}>Categoria</Text>
           <View style={styles.linhaChips}>
@@ -251,6 +282,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: colors.border,
+    color: colors.textPrimary,
+  },
+  inputTexto: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
     color: colors.textPrimary,
   },
   linhaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
