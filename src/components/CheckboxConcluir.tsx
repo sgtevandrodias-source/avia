@@ -36,7 +36,7 @@ export function CheckboxConcluir({ concluido, corPendente, onToggle }: Props) {
   const lidarComToque = () => {
     Haptics.notificationAsync(
       concluido ? Haptics.NotificationFeedbackType.Warning : Haptics.NotificationFeedbackType.Success,
-    );
+    ).catch(() => {});
     onToggle();
   };
 
