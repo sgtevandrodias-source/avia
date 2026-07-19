@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  API_KEY: string;
 }
 
 interface ItemApi {
@@ -135,6 +136,11 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: CORS_HEADERS });
+    }
+
+    const chaveRecebida = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+    if (!env.API_KEY || chaveRecebida !== env.API_KEY) {
+      return json({ erro: 'Não autorizado' }, 401);
     }
 
     if (partes[0] !== 'items') {

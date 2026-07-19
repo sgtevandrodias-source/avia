@@ -1,5 +1,6 @@
 import * as db from '../db/database';
 import { API_URL } from './config';
+import { API_KEY } from './secrets';
 import type { Item } from '../types/item';
 
 const CHAVE_ULTIMA_SYNC = 'ultimaSincronizacao';
@@ -13,7 +14,11 @@ async function fetchComTimeout(url: string, opcoes?: RequestInit): Promise<Respo
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    return await fetch(url, { ...opcoes, signal: controller.signal });
+    return await fetch(url, {
+      ...opcoes,
+      headers: { ...opcoes?.headers, Authorization: `Bearer ${API_KEY}` },
+      signal: controller.signal,
+    });
   } finally {
     clearTimeout(timeout);
   }

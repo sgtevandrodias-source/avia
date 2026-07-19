@@ -12,6 +12,9 @@ expo-env.d.ts
 # Cloudflare Workers
 .wrangler/
 
+# Segredos (chave de API do backend — veja src/sync/secrets.example.ts)
+src/sync/secrets.ts
+
 # Native
 .kotlin/
 *.orig.*
