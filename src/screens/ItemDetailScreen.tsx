@@ -13,9 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { format, parse } from 'date-fns';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useItems } from '../context/ItemsContext';
+import { useCategorias } from '../context/CategoriasContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
-import { CATEGORIAS, type Categoria, type Item, type NovoItem, type Recorrencia, type TipoHorario } from '../types/item';
+import { type Categoria, type Item, type NovoItem, type Recorrencia, type TipoHorario } from '../types/item';
 import { avisar, confirmar } from '../utils/confirm';
 
 const TIPOS_HORARIO: { valor: TipoHorario; label: string }[] = [
@@ -35,6 +36,7 @@ export function ItemDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { itens, adicionarItem, editarItem, removerItem } = useItems();
+  const { categorias } = useCategorias();
 
   const itemExistente: Item | undefined = route.params?.itemId
     ? itens.find((i) => i.id === route.params.itemId)
@@ -167,14 +169,14 @@ export function ItemDetailScreen() {
 
           <Text style={styles.label}>Categoria</Text>
           <View style={styles.linhaChips}>
-            {CATEGORIAS.map((cat) => (
+            {categorias.map((cat) => (
               <Pressable
-                key={cat.valor}
-                style={[styles.chip, categoria === cat.valor && { backgroundColor: cat.cor }]}
-                onPress={() => setCategoria(cat.valor)}
+                key={cat.id}
+                style={[styles.chip, categoria === cat.id && { backgroundColor: cat.cor }]}
+                onPress={() => setCategoria(cat.id)}
               >
-                <Text style={[styles.chipTexto, categoria === cat.valor && styles.chipTextoAtivo]}>
-                  {cat.icone} {cat.label}
+                <Text style={[styles.chipTexto, categoria === cat.id && styles.chipTextoAtivo]}>
+                  {cat.icone} {cat.nome}
                 </Text>
               </Pressable>
             ))}

@@ -196,7 +196,10 @@ interface DeteccaoCategoria {
 }
 
 const PALAVRAS_CATEGORIA: { categoria: Categoria; palavras: string[] }[] = [
-  { categoria: 'social', palavras: ['parabenizar', 'aniversario', 'aniversário', 'presente', 'felicitar'] },
+  {
+    categoria: 'aniversario',
+    palavras: ['aniversario', 'aniversário', 'parabenizar', 'felicitar', 'presente de aniversario', 'presente de aniversário'],
+  },
   { categoria: 'trabalho', palavras: ['reuniao', 'reunião', 'call', 'entregar', 'relatorio', 'relatório', 'apresentacao', 'apresentação'] },
   { categoria: 'saude', palavras: ['medico', 'médico', 'consulta', 'exame', 'dentista'] },
 ];
@@ -257,15 +260,8 @@ export function parseItem(textoOriginal: string, agora: Date = new Date()): Resu
   const deteccaoCategoria = detectarCategoria(textoOriginal);
   if (deteccaoCategoria.trecho) trechosReconhecidos.push(deteccaoCategoria.trecho);
 
-  let recorrencia = detectarRecorrencia(textoOriginal);
-  // "aniversário" sem categoria social explícita ainda cai em social (é o próprio gatilho)
-  const categoria: Categoria =
-    deteccaoCategoria.categoria === 'outro' && /aniversari/i.test(removerAcentosLeve(textoOriginal))
-      ? 'social'
-      : deteccaoCategoria.categoria;
-  if (categoria === 'social' && /aniversari/i.test(removerAcentosLeve(textoOriginal))) {
-    recorrencia = 'anual';
-  }
+  const recorrencia = detectarRecorrencia(textoOriginal);
+  const categoria: Categoria = deteccaoCategoria.categoria;
 
   // Só removemos data/hora do título — a palavra-chave de categoria costuma
   // ser o próprio assunto (ex.: "reunião amanhã às 15h" → título "Reunião").

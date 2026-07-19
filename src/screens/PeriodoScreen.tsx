@@ -6,6 +6,7 @@ import { CapturaRapida } from '../components/CapturaRapida';
 import { ItemCard } from '../components/ItemCard';
 import { ProgressoDoDia } from '../components/ProgressoDoDia';
 import { useItems } from '../context/ItemsContext';
+import { useCategorias } from '../context/CategoriasContext';
 import { colors, corPorPeriodo, type PeriodoKey } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { agruparPorCategoria, itensDoPeriodo, itensFeitosHoje, itensPendentesHoje } from '../utils/periodos';
@@ -18,6 +19,7 @@ interface Props {
 
 export function PeriodoScreen({ periodo, titulo }: Props) {
   const { itens, alternarStatus } = useItems();
+  const { categorias } = useCategorias();
   const navigation = useNavigation<any>();
   const corPendente = corPorPeriodo[periodo];
 
@@ -26,11 +28,11 @@ export function PeriodoScreen({ periodo, titulo }: Props) {
   const secoes = useMemo(() => {
     const grupos = agruparPorCategoria(itensPeriodo);
     return Array.from(grupos.entries()).map(([categoria, dados]) => ({
-      title: categoriaInfo(categoria).label,
-      icone: categoriaInfo(categoria).icone,
+      title: categoriaInfo(categorias, categoria).nome,
+      icone: categoriaInfo(categorias, categoria).icone,
       data: dados,
     }));
-  }, [itensPeriodo]);
+  }, [itensPeriodo, categorias]);
 
   const totalHoje = itensPendentesHoje(itens).length + itensFeitosHoje(itens).length;
   const feitosHoje = itensFeitosHoje(itens).length;

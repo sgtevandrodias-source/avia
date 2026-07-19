@@ -9,6 +9,7 @@ import {
 } from 'expo-speech-recognition';
 import { parseItem, type ResultadoParse } from '../parser/parseItem';
 import { useItems } from '../context/ItemsContext';
+import { useCategorias } from '../context/CategoriasContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { categoriaInfo } from '../types/item';
@@ -18,6 +19,7 @@ export function CapturaRapida() {
   const [texto, setTexto] = useState('');
   const [resultado, setResultado] = useState<ResultadoParse | null>(null);
   const [ouvindo, setOuvindo] = useState(false);
+  const { categorias } = useCategorias();
   const transcricaoRef = useRef('');
   const escalaPulso = useRef(new Animated.Value(1)).current;
   const { adicionarItem } = useItems();
@@ -105,7 +107,7 @@ export function CapturaRapida() {
   };
 
   if (resultado) {
-    const categoria = categoriaInfo(resultado.item.categoria);
+    const categoria = categoriaInfo(categorias, resultado.item.categoria);
     const dataFormatada = format(parseISO(resultado.item.data), "dd/MM/yyyy");
     const horario =
       resultado.item.tipoHorario === 'compromisso'
@@ -128,7 +130,7 @@ export function CapturaRapida() {
           )}
           <View style={[styles.chip, { backgroundColor: categoria.cor + '22' }]}>
             <Text style={styles.chipTexto}>
-              {categoria.icone} {categoria.label}
+              {categoria.icone} {categoria.nome}
             </Text>
           </View>
         </View>

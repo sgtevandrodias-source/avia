@@ -1,5 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import type { Item, NovoItem } from '../types/item';
+import type { CategoriaItem, Item, NovaCategoria, NovoItem } from '../types/item';
 import { obterTokenAtual } from '../auth/sessionToken';
 import { API_URL } from '../sync/config';
 
@@ -74,3 +74,35 @@ export async function getMeta(): Promise<string | null> {
   return null;
 }
 export async function setMeta(): Promise<void> {}
+
+// ---- Categorias (Fase 3) ----
+
+export async function listarCategorias(): Promise<CategoriaItem[]> {
+  return request<CategoriaItem[]>('/categorias');
+}
+
+export async function criarCategoria(nova: NovaCategoria): Promise<CategoriaItem> {
+  const agora = new Date().toISOString();
+  const categoria: CategoriaItem = { ...nova, id: Crypto.randomUUID(), criadoEm: agora, atualizadoEm: agora };
+  await request('/categorias', { method: 'POST', body: JSON.stringify(categoria) });
+  return categoria;
+}
+
+export async function atualizarCategoria(categoria: CategoriaItem): Promise<void> {
+  const atualizado: CategoriaItem = { ...categoria, atualizadoEm: new Date().toISOString() };
+  await request(`/categorias/${categoria.id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
+}
+
+export async function excluirCategoria(id: string): Promise<void> {
+  await request(`/categorias/${id}`, { method: 'DELETE' });
+}
+
+export async function upsertCategoriaLocal(): Promise<void> {}
+export async function removerCategoriaLocal(): Promise<void> {}
+export async function categoriasAlteradasDesde(): Promise<CategoriaItem[]> {
+  return [];
+}
+export async function listarExclusoesPendentesCategorias(): Promise<string[]> {
+  return [];
+}
+export async function removerExclusaoPendenteCategoria(): Promise<void> {}

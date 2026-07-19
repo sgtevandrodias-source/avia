@@ -1,12 +1,10 @@
 export type TipoHorario = 'nenhum' | 'compromisso' | 'prazo';
 
-export type Categoria =
-  | 'social'
-  | 'trabalho'
-  | 'pessoal'
-  | 'saude'
-  | 'compromisso_fixo'
-  | 'outro';
+// Id de uma categoria — as categorias em si (nome/ícone/cor) agora são
+// dinâmicas por usuário, ver CategoriasContext. Strings fixas como
+// 'social'/'aniversario'/'outro' continuam existindo como categorias
+// padrão semeadas no primeiro login (worker/src/categoriasPadrao.ts).
+export type Categoria = string;
 
 export type Status = 'pendente' | 'feito';
 
@@ -31,15 +29,23 @@ export interface Item {
 
 export type NovoItem = Omit<Item, 'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm'>;
 
-export const CATEGORIAS: { valor: Categoria; label: string; icone: string; cor: string }[] = [
-  { valor: 'social', label: 'Social', icone: '🎉', cor: '#B084F5' },
-  { valor: 'trabalho', label: 'Trabalho', icone: '💼', cor: '#4C9AFF' },
-  { valor: 'pessoal', label: 'Pessoal', icone: '🏠', cor: '#F5A623' },
-  { valor: 'saude', label: 'Saúde', icone: '⚕️', cor: '#2BB3A3' },
-  { valor: 'compromisso_fixo', label: 'Compromisso fixo', icone: '📌', cor: '#7A8CA3' },
-  { valor: 'outro', label: 'Outro', icone: '•', cor: '#9AA3AF' },
-];
+export interface CategoriaItem {
+  id: string;
+  nome: string;
+  icone: string;
+  cor: string;
+  sistema: boolean;
+  criadoEm: string;
+  atualizadoEm: string;
+}
 
-export function categoriaInfo(categoria: Categoria) {
-  return CATEGORIAS.find((c) => c.valor === categoria) ?? CATEGORIAS[CATEGORIAS.length - 1];
+export type NovaCategoria = Omit<CategoriaItem, 'id' | 'criadoEm' | 'atualizadoEm'>;
+
+const CATEGORIA_DESCONHECIDA_BASE = { nome: 'Outro', icone: '•', cor: '#9AA3AF', sistema: true };
+
+/** Busca a categoria pelo id na lista carregada; se não achar (ex.: ainda sincronizando), devolve um fallback seguro. */
+export function categoriaInfo(categorias: CategoriaItem[], categoriaId: string): CategoriaItem {
+  const encontrada = categorias.find((c) => c.id === categoriaId);
+  if (encontrada) return encontrada;
+  return { id: categoriaId, criadoEm: '', atualizadoEm: '', ...CATEGORIA_DESCONHECIDA_BASE };
 }

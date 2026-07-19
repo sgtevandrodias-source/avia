@@ -6,6 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import * as SplashScreen from 'expo-splash-screen';
 import { RootNavigator } from './src/navigation';
 import { ItemsProvider } from './src/context/ItemsContext';
+import { CategoriasProvider } from './src/context/CategoriasContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { useAviaFonts } from './src/theme/typography';
@@ -21,9 +22,11 @@ function Conteudo() {
   return (
     <NavigationContainer>
       {usuario ? (
-        <ItemsProvider>
-          <RootNavigator />
-        </ItemsProvider>
+        <CategoriasProvider>
+          <ItemsProvider>
+            <RootNavigator />
+          </ItemsProvider>
+        </CategoriasProvider>
       ) : (
         <LoginScreen />
       )}

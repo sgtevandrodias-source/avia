@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckboxConcluir } from './CheckboxConcluir';
+import { useCategorias } from '../context/CategoriasContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { categoriaInfo, type Item } from '../types/item';
@@ -24,7 +25,8 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
     }).start();
   }, [concluido]);
 
-  const categoria = categoriaInfo(item.categoria);
+  const { categorias } = useCategorias();
+  const categoria = categoriaInfo(categorias, item.categoria);
   const horario =
     item.tipoHorario === 'compromisso'
       ? item.horaCompromisso
@@ -44,7 +46,7 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
         </Text>
         <View style={styles.linhaMeta}>
           <Text style={styles.categoria}>
-            {categoria.icone} {categoria.label}
+            {categoria.icone} {categoria.nome}
           </Text>
           {horario && <Text style={styles.horario}>{horario}</Text>}
         </View>

@@ -1,4 +1,5 @@
 import { criarJwt, hashSenha, verificarGoogleIdToken, verificarJwt, verificarSenha } from './auth';
+import { semearCategoriasPadrao } from './categoriasPadrao';
 
 export interface Env {
   DB: D1Database;
@@ -53,6 +54,29 @@ interface UsuarioRow {
   criado_em: string;
 }
 
+interface CategoriaApi {
+  id: string;
+  nome: string;
+  icone: string;
+  cor: string;
+  sistema: boolean;
+  criadoEm: string;
+  atualizadoEm: string;
+  excluido?: boolean;
+}
+
+interface CategoriaRow {
+  id: string;
+  usuario_id: string;
+  nome: string;
+  icone: string;
+  cor: string;
+  sistema: number;
+  criado_em: string;
+  atualizado_em: string;
+  excluido: number;
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
@@ -88,6 +112,64 @@ function rowParaApi(row: ItemRow): ItemApi {
 
 function usuarioParaApi(row: UsuarioRow) {
   return { id: row.id, email: row.email, nome: row.nome };
+}
+
+function categoriaRowParaApi(row: CategoriaRow): CategoriaApi {
+  return {
+    id: row.id,
+    nome: row.nome,
+    icone: row.icone,
+    cor: row.cor,
+    sistema: row.sistema === 1,
+    criadoEm: row.criado_em,
+    atualizadoEm: row.atualizado_em,
+    excluido: row.excluido === 1,
+  };
+}
+
+async function buscarCategoriaPorId(db: D1Database, id: string, usuarioId: string): Promise<CategoriaRow | null> {
+  const row = await db
+    .prepare('SELECT * FROM categorias WHERE id = ? AND usuario_id = ?')
+    .bind(id, usuarioId)
+    .first<CategoriaRow>();
+  return row ?? null;
+}
+
+async function upsertCategoriaComLWW(
+  db: D1Database,
+  categoria: CategoriaApi,
+  usuarioId: string,
+): Promise<{ categoria: CategoriaApi; aplicado: boolean }> {
+  const existente = await buscarCategoriaPorId(db, categoria.id, usuarioId);
+  if (existente && existente.atualizado_em >= categoria.atualizadoEm) {
+    return { categoria: categoriaRowParaApi(existente), aplicado: false };
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO categorias (id, usuario_id, nome, icone, cor, sistema, criado_em, atualizado_em, excluido)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id, usuario_id) DO UPDATE SET
+         nome = excluded.nome,
+         icone = excluded.icone,
+         cor = excluded.cor,
+         atualizado_em = excluded.atualizado_em,
+         excluido = excluded.excluido`,
+    )
+    .bind(
+      categoria.id,
+      usuarioId,
+      categoria.nome,
+      categoria.icone,
+      categoria.cor,
+      existente?.sistema ? 1 : categoria.sistema ? 1 : 0,
+      categoria.criadoEm,
+      categoria.atualizadoEm,
+      categoria.excluido ? 1 : 0,
+    )
+    .run();
+
+  return { categoria, aplicado: true };
 }
 
 async function buscarPorId(db: D1Database, id: string, usuarioId: string): Promise<ItemRow | null> {
@@ -185,6 +267,7 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
     )
       .bind(id, email, nome, senhaHash, new Date().toISOString())
       .run();
+    await semearCategoriasPadrao(env.DB, id);
 
     const token = await criarJwt({ sub: id, email, nome }, env.JWT_SECRET);
     return json({ token, usuario: { id, email, nome } });
@@ -227,6 +310,7 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
         )
           .bind(id, payload.email, payload.name, payload.sub, new Date().toISOString())
           .run();
+        await semearCategoriasPadrao(env.DB, id);
         usuario = { id, email: payload.email, nome: payload.name, senha_hash: null, google_sub: payload.sub, criado_em: '' };
       }
     }
@@ -236,6 +320,72 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
   }
 
   return json({ erro: 'Rota de autenticação não encontrada' }, 404);
+}
+
+async function tratarCategorias(
+  request: Request,
+  env: Env,
+  usuarioId: string,
+  id: string | undefined,
+  url: URL,
+): Promise<Response> {
+  // GET /categorias  ou  GET /categorias?since=ISO
+  if (request.method === 'GET' && !id) {
+    const since = url.searchParams.get('since');
+    const stmt = since
+      ? env.DB.prepare('SELECT * FROM categorias WHERE usuario_id = ? AND atualizado_em > ? ORDER BY atualizado_em ASC').bind(
+          usuarioId,
+          since,
+        )
+      : env.DB.prepare('SELECT * FROM categorias WHERE usuario_id = ? AND excluido = 0 ORDER BY criado_em ASC').bind(
+          usuarioId,
+        );
+    const { results } = await stmt.all<CategoriaRow>();
+    return json(results.map(categoriaRowParaApi));
+  }
+
+  // GET /categorias/:id
+  if (request.method === 'GET' && id) {
+    const row = await buscarCategoriaPorId(env.DB, id, usuarioId);
+    if (!row) return json({ erro: 'Categoria não encontrada' }, 404);
+    return json(categoriaRowParaApi(row));
+  }
+
+  // POST /categorias  (upsert; usa o id do corpo)
+  if (request.method === 'POST' && !id) {
+    const categoria = (await request.json()) as CategoriaApi;
+    if (!categoria.id || !categoria.atualizadoEm) {
+      return json({ erro: 'id e atualizadoEm são obrigatórios' }, 400);
+    }
+    const resultado = await upsertCategoriaComLWW(env.DB, categoria, usuarioId);
+    return json(resultado.categoria, resultado.aplicado ? 200 : 409);
+  }
+
+  // PUT /categorias/:id  (upsert; usa o id da URL)
+  if (request.method === 'PUT' && id) {
+    const corpo = (await request.json()) as CategoriaApi;
+    const categoria: CategoriaApi = { ...corpo, id };
+    if (!categoria.atualizadoEm) {
+      return json({ erro: 'atualizadoEm é obrigatório' }, 400);
+    }
+    const resultado = await upsertCategoriaComLWW(env.DB, categoria, usuarioId);
+    return json(resultado.categoria, resultado.aplicado ? 200 : 409);
+  }
+
+  // DELETE /categorias/:id  (soft delete; categorias de sistema nao podem ser excluidas)
+  if (request.method === 'DELETE' && id) {
+    const existente = await buscarCategoriaPorId(env.DB, id, usuarioId);
+    if (existente?.sistema === 1) {
+      return json({ erro: 'Categorias padrão não podem ser excluídas' }, 403);
+    }
+    const agora = new Date().toISOString();
+    await env.DB.prepare('UPDATE categorias SET excluido = 1, atualizado_em = ? WHERE id = ? AND usuario_id = ?')
+      .bind(agora, id, usuarioId)
+      .run();
+    return json({ ok: true });
+  }
+
+  return json({ erro: 'Método não suportado' }, 405);
 }
 
 export default {
@@ -256,6 +406,10 @@ export default {
       const usuarioId = await autenticar(request, env);
       if (!usuarioId) {
         return json({ erro: 'Não autorizado' }, 401);
+      }
+
+      if (partes[0] === 'categorias') {
+        return await tratarCategorias(request, env, usuarioId, partes[1], url);
       }
 
       if (partes[0] !== 'items') {

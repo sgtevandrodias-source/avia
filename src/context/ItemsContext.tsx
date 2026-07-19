@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import * as db from '../db/database';
+import { useCategorias } from './CategoriasContext';
 import { agendarNotificacaoDoItem, cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { sincronizar } from '../sync/sync';
 import type { Item, NovoItem } from '../types/item';
@@ -23,6 +24,7 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const [carregando, setCarregando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const sincronizacaoEmCurso = useRef(false);
+  const { recarregar: recarregarCategorias } = useCategorias();
 
   const recarregar = useCallback(async () => {
     const lista = await db.listarItens();
@@ -35,12 +37,12 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     setSincronizando(true);
     try {
       await sincronizar();
-      await recarregar();
+      await Promise.all([recarregar(), recarregarCategorias()]);
     } finally {
       sincronizacaoEmCurso.current = false;
       setSincronizando(false);
     }
-  }, [recarregar]);
+  }, [recarregar, recarregarCategorias]);
 
   useEffect(() => {
     recarregar()

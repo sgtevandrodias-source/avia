@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
-import type { Item, NovoItem } from '../types/item';
+import type { CategoriaItem, Item, NovaCategoria, NovoItem } from '../types/item';
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -44,6 +44,21 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
         );
 
         CREATE TABLE IF NOT EXISTS exclusoes_pendentes (
+          id TEXT PRIMARY KEY NOT NULL,
+          quando TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS categorias (
+          id TEXT PRIMARY KEY NOT NULL,
+          nome TEXT NOT NULL,
+          icone TEXT NOT NULL,
+          cor TEXT NOT NULL,
+          sistema INTEGER NOT NULL DEFAULT 0,
+          criado_em TEXT NOT NULL,
+          atualizado_em TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS exclusoes_pendentes_categorias (
           id TEXT PRIMARY KEY NOT NULL,
           quando TEXT NOT NULL
         );
@@ -264,4 +279,104 @@ export async function getMeta(chave: string): Promise<string | null> {
 export async function setMeta(chave: string, valor: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('INSERT OR REPLACE INTO sync_meta (chave, valor) VALUES (?, ?)', [chave, valor]);
+}
+
+// ---- Categorias (Fase 3) ----
+
+interface CategoriaRow {
+  id: string;
+  nome: string;
+  icone: string;
+  cor: string;
+  sistema: number;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+function rowParaCategoria(row: CategoriaRow): CategoriaItem {
+  return {
+    id: row.id,
+    nome: row.nome,
+    icone: row.icone,
+    cor: row.cor,
+    sistema: row.sistema === 1,
+    criadoEm: row.criado_em,
+    atualizadoEm: row.atualizado_em,
+  };
+}
+
+export async function listarCategorias(): Promise<CategoriaItem[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<CategoriaRow>('SELECT * FROM categorias ORDER BY criado_em ASC');
+  return rows.map(rowParaCategoria);
+}
+
+export async function criarCategoria(nova: NovaCategoria): Promise<CategoriaItem> {
+  const db = await getDb();
+  const agora = new Date().toISOString();
+  const categoria: CategoriaItem = { ...nova, id: Crypto.randomUUID(), criadoEm: agora, atualizadoEm: agora };
+  await db.runAsync(
+    'INSERT INTO categorias (id, nome, icone, cor, sistema, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [categoria.id, categoria.nome, categoria.icone, categoria.cor, categoria.sistema ? 1 : 0, categoria.criadoEm, categoria.atualizadoEm],
+  );
+  return categoria;
+}
+
+export async function atualizarCategoria(categoria: CategoriaItem): Promise<void> {
+  const db = await getDb();
+  const atualizadoEm = new Date().toISOString();
+  await db.runAsync('UPDATE categorias SET nome = ?, icone = ?, cor = ?, atualizado_em = ? WHERE id = ?', [
+    categoria.nome,
+    categoria.icone,
+    categoria.cor,
+    atualizadoEm,
+    categoria.id,
+  ]);
+}
+
+export async function excluirCategoria(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM categorias WHERE id = ?', [id]);
+  await db.runAsync('INSERT OR REPLACE INTO exclusoes_pendentes_categorias (id, quando) VALUES (?, ?)', [
+    id,
+    new Date().toISOString(),
+  ]);
+}
+
+export async function upsertCategoriaLocal(categoria: CategoriaItem): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO categorias (id, nome, icone, cor, sistema, criado_em, atualizado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       nome = excluded.nome,
+       icone = excluded.icone,
+       cor = excluded.cor,
+       atualizado_em = excluded.atualizado_em`,
+    [categoria.id, categoria.nome, categoria.icone, categoria.cor, categoria.sistema ? 1 : 0, categoria.criadoEm, categoria.atualizadoEm],
+  );
+}
+
+export async function removerCategoriaLocal(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM categorias WHERE id = ?', [id]);
+}
+
+export async function categoriasAlteradasDesde(desde: string | null): Promise<CategoriaItem[]> {
+  const db = await getDb();
+  const rows = desde
+    ? await db.getAllAsync<CategoriaRow>('SELECT * FROM categorias WHERE atualizado_em > ?', [desde])
+    : await db.getAllAsync<CategoriaRow>('SELECT * FROM categorias');
+  return rows.map(rowParaCategoria);
+}
+
+export async function listarExclusoesPendentesCategorias(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string }>('SELECT id FROM exclusoes_pendentes_categorias');
+  return rows.map((r) => r.id);
+}
+
+export async function removerExclusaoPendenteCategoria(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM exclusoes_pendentes_categorias WHERE id = ?', [id]);
 }
