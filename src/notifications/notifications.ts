@@ -49,7 +49,9 @@ export async function agendarNotificacaoDoItem(item: Item): Promise<string | nul
           ? `Compromisso às ${item.horaCompromisso}`
           : item.tipoHorario === 'prazo'
             ? `Prazo até ${item.horaLimite}`
-            : 'Lembrete do AVIA',
+            : item.tipoHorario === 'dia_todo'
+              ? 'Evento do dia todo'
+              : 'Lembrete do AVIA',
       data: { itemId: item.id },
     },
     trigger: {

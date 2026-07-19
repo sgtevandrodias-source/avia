@@ -146,7 +146,7 @@ function detectarData(textoOriginal: string, agora: Date): DeteccaoData | null {
 
 interface DeteccaoHorario {
   tipoHorario: TipoHorario;
-  hora: string; // HH:mm
+  hora: string; // HH:mm — vazio quando tipoHorario === 'dia_todo' (não se aplica)
   trecho: string;
 }
 
@@ -162,6 +162,12 @@ function parseHora(horaStr: string, minutoStr: string | undefined, periodo: stri
 function detectarHorario(textoOriginal: string): DeteccaoHorario | null {
   const texto = normalizar(textoOriginal);
   const textoSemAcento = removerAcentosLeve(texto);
+
+  // "dia todo", "o dia todo", "dia inteiro", "o dia inteiro"
+  const matchDiaTodo = textoSemAcento.match(/\bo\s+dia\s+(?:todo|inteiro)\b|\bdia\s+(?:todo|inteiro)\b/);
+  if (matchDiaTodo) {
+    return { tipoHorario: 'dia_todo', hora: '', trecho: matchDiaTodo[0] };
+  }
 
   // "até as 18h", "até às 18:30", "até 18h", "até 18"
   const matchPrazo = textoSemAcento.match(

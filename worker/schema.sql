@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS items (
   data TEXT NOT NULL,
   hora_compromisso TEXT,
   hora_limite TEXT,
-  tipo_horario TEXT NOT NULL DEFAULT 'nenhum',
+  tipo_horario TEXT NOT NULL DEFAULT 'nenhum', -- 'nenhum' | 'compromisso' | 'prazo' | 'dia_todo'
   categoria TEXT NOT NULL DEFAULT 'outro',
   status TEXT NOT NULL DEFAULT 'pendente',
   recorrencia TEXT NOT NULL DEFAULT 'nenhuma',

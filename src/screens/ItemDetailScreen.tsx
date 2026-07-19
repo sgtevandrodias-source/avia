@@ -23,6 +23,7 @@ const TIPOS_HORARIO: { valor: TipoHorario; label: string }[] = [
   { valor: 'nenhum', label: 'Sem horário' },
   { valor: 'compromisso', label: 'Compromisso' },
   { valor: 'prazo', label: 'Prazo' },
+  { valor: 'dia_todo', label: 'O dia todo' },
 ];
 
 const RECORRENCIAS: { valor: Recorrencia; label: string }[] = [

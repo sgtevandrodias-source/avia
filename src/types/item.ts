@@ -1,4 +1,4 @@
-export type TipoHorario = 'nenhum' | 'compromisso' | 'prazo';
+export type TipoHorario = 'nenhum' | 'compromisso' | 'prazo' | 'dia_todo';
 
 // Id de uma categoria — as categorias em si (nome/ícone/cor) agora são
 // dinâmicas por usuário, ver CategoriasContext. Strings fixas como
