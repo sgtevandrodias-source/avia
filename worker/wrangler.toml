@@ -1,0 +1,8 @@
+name = "avia-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-19"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "avia-db"
+database_id = "2d3b7413-c933-47b3-ac7c-ad2eed0252b7"

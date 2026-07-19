@@ -1,12 +1,15 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import * as db from '../db/database';
 import { agendarNotificacaoDoItem, cancelarNotificacoesDoItem } from '../notifications/notifications';
+import { sincronizar } from '../sync/sync';
 import type { Item, NovoItem } from '../types/item';
 
 interface ItemsContextValue {
   itens: Item[];
   carregando: boolean;
+  sincronizando: boolean;
   recarregar: () => Promise<void>;
+  sincronizarAgora: () => Promise<void>;
   adicionarItem: (novoItem: NovoItem) => Promise<Item>;
   editarItem: (item: Item) => Promise<void>;
   removerItem: (id: string) => Promise<void>;
@@ -18,37 +21,66 @@ const ItemsContext = createContext<ItemsContextValue | null>(null);
 export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const [itens, setItens] = useState<Item[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [sincronizando, setSincronizando] = useState(false);
+  const sincronizacaoEmCurso = useRef(false);
 
   const recarregar = useCallback(async () => {
     const lista = await db.listarItens();
     setItens(lista);
   }, []);
 
-  useEffect(() => {
-    recarregar().finally(() => setCarregando(false));
+  const sincronizarAgora = useCallback(async () => {
+    if (sincronizacaoEmCurso.current) return;
+    sincronizacaoEmCurso.current = true;
+    setSincronizando(true);
+    try {
+      await sincronizar();
+      await recarregar();
+    } finally {
+      sincronizacaoEmCurso.current = false;
+      setSincronizando(false);
+    }
   }, [recarregar]);
 
-  const adicionarItem = useCallback(async (novoItem: NovoItem) => {
-    const item = await db.criarItem(novoItem);
-    setItens((atual) => [...atual, item]);
-    agendarNotificacaoDoItem(item).catch(() => {});
-    return item;
-  }, []);
+  useEffect(() => {
+    recarregar()
+      .finally(() => setCarregando(false))
+      .then(() => sincronizarAgora());
+  }, [recarregar, sincronizarAgora]);
 
-  const editarItem = useCallback(async (item: Item) => {
-    await db.atualizarItem(item);
-    setItens((atual) => atual.map((i) => (i.id === item.id ? item : i)));
-    await cancelarNotificacoesDoItem(item.id);
-    if (item.status === 'pendente') {
+  const adicionarItem = useCallback(
+    async (novoItem: NovoItem) => {
+      const item = await db.criarItem(novoItem);
+      setItens((atual) => [...atual, item]);
       agendarNotificacaoDoItem(item).catch(() => {});
-    }
-  }, []);
+      sincronizarAgora();
+      return item;
+    },
+    [sincronizarAgora],
+  );
 
-  const removerItem = useCallback(async (id: string) => {
-    await db.excluirItem(id);
-    await cancelarNotificacoesDoItem(id);
-    setItens((atual) => atual.filter((i) => i.id !== id));
-  }, []);
+  const editarItem = useCallback(
+    async (item: Item) => {
+      await db.atualizarItem(item);
+      setItens((atual) => atual.map((i) => (i.id === item.id ? item : i)));
+      await cancelarNotificacoesDoItem(item.id);
+      if (item.status === 'pendente') {
+        agendarNotificacaoDoItem(item).catch(() => {});
+      }
+      sincronizarAgora();
+    },
+    [sincronizarAgora],
+  );
+
+  const removerItem = useCallback(
+    async (id: string) => {
+      await db.excluirItem(id);
+      await cancelarNotificacoesDoItem(id);
+      setItens((atual) => atual.filter((i) => i.id !== id));
+      sincronizarAgora();
+    },
+    [sincronizarAgora],
+  );
 
   const alternarStatus = useCallback(
     async (id: string) => {
@@ -65,13 +97,24 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       } else {
         agendarNotificacaoDoItem({ ...item, status: novoStatus, concluidoEm }).catch(() => {});
       }
+      sincronizarAgora();
     },
-    [itens],
+    [itens, sincronizarAgora],
   );
 
   return (
     <ItemsContext.Provider
-      value={{ itens, carregando, recarregar, adicionarItem, editarItem, removerItem, alternarStatus }}
+      value={{
+        itens,
+        carregando,
+        sincronizando,
+        recarregar,
+        sincronizarAgora,
+        adicionarItem,
+        editarItem,
+        removerItem,
+        alternarStatus,
+      }}
     >
       {children}
     </ItemsContext.Provider>

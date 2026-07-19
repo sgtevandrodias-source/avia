@@ -26,9 +26,10 @@ export interface Item {
   lembreteOffsetDias: number;
   criadoEm: string; // ISO datetime
   concluidoEm: string | null; // ISO datetime
+  atualizadoEm: string; // ISO datetime — usado pela sincronização (last write wins)
 }
 
-export type NovoItem = Omit<Item, 'id' | 'status' | 'criadoEm' | 'concluidoEm'>;
+export type NovoItem = Omit<Item, 'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm'>;
 
 export const CATEGORIAS: { valor: Categoria; label: string; icone: string; cor: string }[] = [
   { valor: 'social', label: 'Social', icone: '🎉', cor: '#B084F5' },

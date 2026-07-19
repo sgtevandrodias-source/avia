@@ -1,14 +1,27 @@
 import React from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { CATEGORIAS } from '../types/item';
 
 export function SettingsScreen() {
+  const { sincronizando, sincronizarAgora } = useItems();
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.titulo}>Configurações</Text>
+
+      <Text style={styles.secao}>Sincronização</Text>
+      <Pressable style={styles.linhaSync} onPress={sincronizarAgora} disabled={sincronizando}>
+        {sincronizando ? (
+          <ActivityIndicator color={colors.urgentHoje} />
+        ) : (
+          <Text style={styles.syncTexto}>🔄 Sincronizar agora</Text>
+        )}
+      </Pressable>
+
       <Text style={styles.secao}>Categorias</Text>
       <FlatList
         data={CATEGORIAS}
@@ -43,6 +56,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginTop: 20,
     marginBottom: 8,
+  },
+  linhaSync: {
+    marginHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  syncTexto: {
+    fontFamily: fonts.medium,
+    fontSize: 14,
+    color: colors.textPrimary,
   },
   lista: { paddingHorizontal: 16 },
   linha: {

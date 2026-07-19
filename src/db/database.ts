@@ -4,6 +4,18 @@ import type { Item, NovoItem } from '../types/item';
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
+async function adicionarColunaSeNaoExistir(
+  db: SQLite.SQLiteDatabase,
+  tabela: string,
+  coluna: string,
+  definicao: string,
+): Promise<void> {
+  const colunas = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tabela})`);
+  if (!colunas.some((c) => c.name === coluna)) {
+    await db.execAsync(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${definicao}`);
+  }
+}
+
 function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = SQLite.openDatabaseAsync('avia.db').then(async (db) => {
@@ -25,7 +37,22 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
         );
         CREATE INDEX IF NOT EXISTS idx_items_data ON items(data);
         CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
+
+        CREATE TABLE IF NOT EXISTS sync_meta (
+          chave TEXT PRIMARY KEY NOT NULL,
+          valor TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS exclusoes_pendentes (
+          id TEXT PRIMARY KEY NOT NULL,
+          quando TEXT NOT NULL
+        );
       `);
+      // Migração: bancos criados antes da sincronização não têm atualizado_em.
+      await adicionarColunaSeNaoExistir(db, 'items', 'atualizado_em', 'TEXT');
+      await db.runAsync(
+        `UPDATE items SET atualizado_em = criado_em WHERE atualizado_em IS NULL`,
+      );
       return db;
     });
   }
@@ -46,6 +73,7 @@ interface ItemRow {
   lembrete_offset_dias: number;
   criado_em: string;
   concluido_em: string | null;
+  atualizado_em: string;
 }
 
 function rowParaItem(row: ItemRow): Item {
@@ -63,6 +91,7 @@ function rowParaItem(row: ItemRow): Item {
     lembreteOffsetDias: row.lembrete_offset_dias,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
+    atualizadoEm: row.atualizado_em,
   };
 }
 
@@ -76,18 +105,20 @@ export async function listarItens(): Promise<Item[]> {
 
 export async function criarItem(novoItem: NovoItem): Promise<Item> {
   const db = await getDb();
+  const agora = new Date().toISOString();
   const item: Item = {
     ...novoItem,
     id: Crypto.randomUUID(),
     status: 'pendente',
-    criadoEm: new Date().toISOString(),
+    criadoEm: agora,
     concluidoEm: null,
+    atualizadoEm: agora,
   };
   await db.runAsync(
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
-      tipo_horario, categoria, status, recorrencia, lembrete_offset_dias, criado_em, concluido_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_dias, criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       item.id,
       item.textoOriginal,
@@ -102,6 +133,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
       item.lembreteOffsetDias,
       item.criadoEm,
       item.concluidoEm,
+      item.atualizadoEm,
     ],
   );
   return item;
@@ -109,10 +141,12 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
 
 export async function atualizarItem(item: Item): Promise<void> {
   const db = await getDb();
+  const atualizadoEm = new Date().toISOString();
   await db.runAsync(
     `UPDATE items SET
       texto_original = ?, titulo = ?, data = ?, hora_compromisso = ?, hora_limite = ?,
-      tipo_horario = ?, categoria = ?, status = ?, recorrencia = ?, lembrete_offset_dias = ?, concluido_em = ?
+      tipo_horario = ?, categoria = ?, status = ?, recorrencia = ?, lembrete_offset_dias = ?,
+      concluido_em = ?, atualizado_em = ?
     WHERE id = ?`,
     [
       item.textoOriginal,
@@ -126,6 +160,7 @@ export async function atualizarItem(item: Item): Promise<void> {
       item.recorrencia,
       item.lembreteOffsetDias,
       item.concluidoEm,
+      atualizadoEm,
       item.id,
     ],
   );
@@ -133,10 +168,12 @@ export async function atualizarItem(item: Item): Promise<void> {
 
 export async function marcarStatus(id: string, status: Item['status']): Promise<void> {
   const db = await getDb();
-  const concluidoEm = status === 'feito' ? new Date().toISOString() : null;
-  await db.runAsync('UPDATE items SET status = ?, concluido_em = ? WHERE id = ?', [
+  const agora = new Date().toISOString();
+  const concluidoEm = status === 'feito' ? agora : null;
+  await db.runAsync('UPDATE items SET status = ?, concluido_em = ?, atualizado_em = ? WHERE id = ?', [
     status,
     concluidoEm,
+    agora,
     id,
   ]);
 }
@@ -144,4 +181,87 @@ export async function marcarStatus(id: string, status: Item['status']): Promise<
 export async function excluirItem(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM items WHERE id = ?', [id]);
+  await db.runAsync('INSERT OR REPLACE INTO exclusoes_pendentes (id, quando) VALUES (?, ?)', [
+    id,
+    new Date().toISOString(),
+  ]);
+}
+
+// ---- Suporte à sincronização (Etapa 3) ----
+
+export async function upsertItemLocal(item: Item): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO items (
+      id, texto_original, titulo, data, hora_compromisso, hora_limite,
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_dias, criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      texto_original = excluded.texto_original,
+      titulo = excluded.titulo,
+      data = excluded.data,
+      hora_compromisso = excluded.hora_compromisso,
+      hora_limite = excluded.hora_limite,
+      tipo_horario = excluded.tipo_horario,
+      categoria = excluded.categoria,
+      status = excluded.status,
+      recorrencia = excluded.recorrencia,
+      lembrete_offset_dias = excluded.lembrete_offset_dias,
+      concluido_em = excluded.concluido_em,
+      atualizado_em = excluded.atualizado_em`,
+    [
+      item.id,
+      item.textoOriginal,
+      item.titulo,
+      item.data,
+      item.horaCompromisso,
+      item.horaLimite,
+      item.tipoHorario,
+      item.categoria,
+      item.status,
+      item.recorrencia,
+      item.lembreteOffsetDias,
+      item.criadoEm,
+      item.concluidoEm,
+      item.atualizadoEm,
+    ],
+  );
+}
+
+export async function removerItemLocal(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM items WHERE id = ?', [id]);
+}
+
+export async function itensAlteradosDesde(desde: string | null): Promise<Item[]> {
+  const db = await getDb();
+  const rows = desde
+    ? await db.getAllAsync<ItemRow>('SELECT * FROM items WHERE atualizado_em > ?', [desde])
+    : await db.getAllAsync<ItemRow>('SELECT * FROM items');
+  return rows.map(rowParaItem);
+}
+
+export async function listarExclusoesPendentes(): Promise<string[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: string }>('SELECT id FROM exclusoes_pendentes');
+  return rows.map((r) => r.id);
+}
+
+export async function removerExclusaoPendente(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM exclusoes_pendentes WHERE id = ?', [id]);
+}
+
+export async function getMeta(chave: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ valor: string }>(
+    'SELECT valor FROM sync_meta WHERE chave = ?',
+    [chave],
+  );
+  return row?.valor ?? null;
+}
+
+export async function setMeta(chave: string, valor: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('INSERT OR REPLACE INTO sync_meta (chave, valor) VALUES (?, ?)', [chave, valor]);
 }
