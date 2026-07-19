@@ -8,9 +8,11 @@
     "userInterfaceStyle": "light",
     "backgroundColor": "#FFFFFF",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.avia.app"
     },
     "android": {
+      "package": "com.avia.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -39,6 +41,12 @@
           "color": "#FF5C33"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "35a3ff3d-5162-4e03-b3ea-d51a24890046"
+      }
+    },
+    "owner": "evandro1984"
   }
 }
