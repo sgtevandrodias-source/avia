@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { SectionList, StyleSheet, Text, View } from 'react-native';
+import { Image, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { CapturaRapida } from '../components/CapturaRapida';
 import { ItemCard } from '../components/ItemCard';
 import { ProgressoDoDia } from '../components/ProgressoDoDia';
+import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
 import { colors, corPorPeriodo, type PeriodoKey } from '../theme/colors';
@@ -20,8 +21,10 @@ interface Props {
 export function PeriodoScreen({ periodo, titulo }: Props) {
   const { itens, alternarStatus } = useItems();
   const { categorias } = useCategorias();
+  const { usuario } = useAuth();
   const navigation = useNavigation<any>();
   const corPendente = corPorPeriodo[periodo];
+  const primeiroNome = usuario?.nome?.trim().split(/\s+/)[0] ?? '';
 
   const itensPeriodo = useMemo(() => itensDoPeriodo(itens, periodo), [itens, periodo]);
 
@@ -40,6 +43,12 @@ export function PeriodoScreen({ periodo, titulo }: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={[styles.header, { borderBottomColor: corPendente }]}>
+        {periodo === 'hoje' && (
+          <View style={styles.saudacaoLinha}>
+            <Image source={require('../../assets/icon.png')} style={styles.logoSaudacao} />
+            <Text style={styles.saudacaoTexto}>Avia, {primeiroNome}!</Text>
+          </View>
+        )}
         <Text style={styles.headerTitulo}>{titulo}</Text>
       </View>
       <CapturaRapida />
@@ -85,6 +94,22 @@ const styles = StyleSheet.create({
   headerTitulo: {
     fontFamily: fonts.extraBold,
     fontSize: 24,
+    color: colors.textPrimary,
+  },
+  saudacaoLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  logoSaudacao: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
+  saudacaoTexto: {
+    fontFamily: fonts.extraBold,
+    fontSize: 18,
     color: colors.textPrimary,
   },
   lista: {
