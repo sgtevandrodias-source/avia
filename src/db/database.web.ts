@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { Item, NovoItem } from '../types/item';
+import { obterTokenAtual } from '../auth/sessionToken';
 import { API_URL } from '../sync/config';
-import { API_KEY } from '../sync/secrets';
 
 // Build web: não há SQLite local (expo-sqlite não builda no Metro web),
 // então esse arquivo fala direto com o Worker Cloudflare a cada operação.
@@ -13,7 +13,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_KEY}`,
+      Authorization: `Bearer ${obterTokenAtual()}`,
       ...options?.headers,
     },
   });

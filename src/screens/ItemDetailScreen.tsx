@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { CATEGORIAS, type Categoria, type Item, type NovoItem, type Recorrencia, type TipoHorario } from '../types/item';
+import { avisar, confirmar } from '../utils/confirm';
 
 const TIPOS_HORARIO: { valor: TipoHorario; label: string }[] = [
   { valor: 'nenhum', label: 'Sem horário' },
@@ -64,12 +64,12 @@ export function ItemDetailScreen() {
 
   const salvar = async () => {
     if (!titulo.trim()) {
-      Alert.alert('Título vazio', 'Escreva um título antes de salvar.');
+      avisar('Título vazio', 'Escreva um título antes de salvar.');
       return;
     }
     const dataParseada = parse(dataTexto, 'dd/MM/yyyy', new Date());
     if (isNaN(dataParseada.getTime())) {
-      Alert.alert('Data inválida', 'Use o formato dd/MM/yyyy.');
+      avisar('Data inválida', 'Use o formato dd/MM/yyyy.');
       return;
     }
 
@@ -102,17 +102,10 @@ export function ItemDetailScreen() {
 
   const excluir = () => {
     if (!itemExistente) return;
-    Alert.alert('Excluir item', 'Tem certeza que deseja excluir este item?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Excluir',
-        style: 'destructive',
-        onPress: async () => {
-          await removerItem(itemExistente.id);
-          navigation.goBack();
-        },
-      },
-    ]);
+    confirmar('Excluir item', 'Tem certeza que deseja excluir este item?', async () => {
+      await removerItem(itemExistente.id);
+      navigation.goBack();
+    });
   };
 
   return (

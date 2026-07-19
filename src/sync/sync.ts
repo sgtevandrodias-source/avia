@@ -1,6 +1,6 @@
 import * as db from '../db/database';
+import { obterTokenAtual } from '../auth/sessionToken';
 import { API_URL } from './config';
-import { API_KEY } from './secrets';
 import type { Item } from '../types/item';
 
 const CHAVE_ULTIMA_SYNC = 'ultimaSincronizacao';
@@ -11,12 +11,13 @@ interface ItemRemoto extends Item {
 }
 
 async function fetchComTimeout(url: string, opcoes?: RequestInit): Promise<Response> {
+  const token = obterTokenAtual();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     return await fetch(url, {
       ...opcoes,
-      headers: { ...opcoes?.headers, Authorization: `Bearer ${API_KEY}` },
+      headers: { ...opcoes?.headers, Authorization: `Bearer ${token}` },
       signal: controller.signal,
     });
   } finally {
@@ -67,10 +68,12 @@ async function receberAlteracoesRemotas(desde: string | null): Promise<void> {
 
 /**
  * Sincroniza o SQLite local com o Worker Cloudflare. Nunca lança erro:
- * se estiver offline ou o servidor falhar, apenas encerra silenciosamente
- * e tenta de novo na próxima chamada (o app continua funcionando 100% local).
+ * se estiver offline, sem sessão, ou o servidor falhar, apenas encerra
+ * silenciosamente e tenta de novo na próxima chamada (o app continua
+ * funcionando 100% local).
  */
 export async function sincronizar(): Promise<{ ok: boolean }> {
+  if (!obterTokenAtual()) return { ok: false };
   try {
     const desde = await db.getMeta(CHAVE_ULTIMA_SYNC);
     await enviarExclusoesPendentes();
@@ -81,4 +84,9 @@ export async function sincronizar(): Promise<{ ok: boolean }> {
   } catch {
     return { ok: false };
   }
+}
+
+/** Força um pull/push completo (ignora o checkpoint) na próxima sincronização — usado ao logar. */
+export async function forcarResyncCompleto(): Promise<void> {
+  await db.setMeta(CHAVE_ULTIMA_SYNC, '');
 }

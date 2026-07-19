@@ -40,7 +40,9 @@
           "icon": "./assets/icon.png",
           "color": "#FF5C33"
         }
-      ]
+      ],
+      "expo-secure-store",
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
       "eas": {

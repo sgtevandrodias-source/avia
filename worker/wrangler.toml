@@ -2,6 +2,9 @@ name = "avia-api"
 main = "src/index.ts"
 compatibility_date = "2026-07-19"
 
+[vars]
+GOOGLE_CLIENT_ID = "338993673589-m2tkn6u9sgahq0lndqr1q3j3ncnavs4f.apps.googleusercontent.com"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "avia-db"

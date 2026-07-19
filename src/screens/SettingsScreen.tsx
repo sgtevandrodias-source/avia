@@ -1,17 +1,35 @@
 import React from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { CATEGORIAS } from '../types/item';
+import { confirmar } from '../utils/confirm';
 
 export function SettingsScreen() {
   const { sincronizando, sincronizarAgora } = useItems();
+  const { usuario, logout } = useAuth();
+
+  const confirmarLogout = () => {
+    confirmar('Sair', 'Tem certeza que deseja sair da sua conta?', () => logout());
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <Text style={styles.titulo}>Configurações</Text>
+
+      <Text style={styles.secao}>Conta</Text>
+      <View style={styles.linhaConta}>
+        <View>
+          <Text style={styles.contaNome}>{usuario?.nome}</Text>
+          <Text style={styles.contaEmail}>{usuario?.email}</Text>
+        </View>
+        <Pressable onPress={confirmarLogout}>
+          <Text style={styles.linkSair}>Sair</Text>
+        </Pressable>
+      </View>
 
       <Text style={styles.secao}>Sincronização</Text>
       <Pressable style={styles.linhaSync} onPress={sincronizarAgora} disabled={sincronizando}>
@@ -57,6 +75,20 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 8,
   },
+  linhaConta: {
+    marginHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  contaNome: { fontFamily: fonts.bold, fontSize: 14, color: colors.textPrimary },
+  contaEmail: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  linkSair: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger },
   linhaSync: {
     marginHorizontal: 16,
     backgroundColor: colors.surface,
