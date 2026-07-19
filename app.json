@@ -42,7 +42,14 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "O AVIA usa o microfone para transformar sua fala em um item.",
+          "speechRecognitionPermission": "O AVIA usa o reconhecimento de fala para transformar sua fala em um item."
+        }
+      ]
     ],
     "extra": {
       "eas": {

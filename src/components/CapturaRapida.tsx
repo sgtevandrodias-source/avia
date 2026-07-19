@@ -1,23 +1,88 @@
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { format, parseISO } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 import { parseItem, type ResultadoParse } from '../parser/parseItem';
 import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { categoriaInfo } from '../types/item';
+import { avisar } from '../utils/confirm';
 
 export function CapturaRapida() {
   const [texto, setTexto] = useState('');
   const [resultado, setResultado] = useState<ResultadoParse | null>(null);
+  const [ouvindo, setOuvindo] = useState(false);
+  const transcricaoRef = useRef('');
+  const escalaPulso = useRef(new Animated.Value(1)).current;
   const { adicionarItem } = useItems();
   const navigation = useNavigation<any>();
+
+  useEffect(() => {
+    if (!ouvindo) {
+      escalaPulso.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(escalaPulso, { toValue: 1.3, duration: 450, useNativeDriver: true }),
+        Animated.timing(escalaPulso, { toValue: 1, duration: 450, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [ouvindo]);
+
+  useSpeechRecognitionEvent('start', () => setOuvindo(true));
+
+  useSpeechRecognitionEvent('end', () => {
+    setOuvindo(false);
+    const transcricaoFinal = transcricaoRef.current.trim();
+    if (transcricaoFinal) {
+      setResultado(parseItem(transcricaoFinal));
+    }
+  });
+
+  useSpeechRecognitionEvent('result', (evento) => {
+    const transcricao = evento.results[0]?.transcript ?? '';
+    transcricaoRef.current = transcricao;
+    setTexto(transcricao);
+  });
+
+  useSpeechRecognitionEvent('error', (evento) => {
+    setOuvindo(false);
+    if (evento.error !== 'no-speech' && evento.error !== 'aborted') {
+      avisar('Não entendi', 'Não conseguimos reconhecer sua fala. Tente de novo ou digite.');
+    }
+  });
 
   const lidarComSubmit = () => {
     if (!texto.trim()) return;
     setResultado(parseItem(texto));
+  };
+
+  const alternarDitado = async () => {
+    if (ouvindo) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+    const permissao = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!permissao.granted) {
+      avisar('Permissão necessária', 'Ative a permissão de microfone pra usar o ditado por voz.');
+      return;
+    }
+    transcricaoRef.current = '';
+    setTexto('');
+    try {
+      ExpoSpeechRecognitionModule.start({ lang: 'pt-BR', interimResults: true });
+    } catch {
+      avisar('Ditado indisponível', 'Não foi possível iniciar o reconhecimento de fala agora.');
+    }
   };
 
   const confirmar = async () => {
@@ -86,13 +151,25 @@ export function CapturaRapida() {
     <View style={styles.wrapper}>
       <TextInput
         style={styles.input}
-        placeholder="Adicionar algo... ex: reunião amanhã às 15h"
+        placeholder={ouvindo ? 'Ouvindo...' : 'Adicionar algo... ex: reunião amanhã às 15h'}
         placeholderTextColor={colors.textMuted}
         value={texto}
         onChangeText={setTexto}
         onSubmitEditing={lidarComSubmit}
         returnKeyType="done"
+        editable={!ouvindo}
       />
+      <Pressable onPress={alternarDitado} hitSlop={8}>
+        <Animated.View
+          style={[
+            styles.botaoMic,
+            ouvindo && styles.botaoMicAtivo,
+            { transform: [{ scale: escalaPulso }] },
+          ]}
+        >
+          <Text style={styles.botaoMicTexto}>🎤</Text>
+        </Animated.View>
+      </Pressable>
       <Pressable style={styles.botaoAdicionar} onPress={lidarComSubmit}>
         <Text style={styles.botaoAdicionarTexto}>+</Text>
       </Pressable>
@@ -121,6 +198,21 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: colors.textPrimary,
   },
+  botaoMic: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  botaoMicAtivo: {
+    backgroundColor: colors.urgentHoje,
+    borderColor: colors.urgentHoje,
+  },
+  botaoMicTexto: { fontSize: 18 },
   botaoAdicionar: {
     width: 40,
     height: 40,
