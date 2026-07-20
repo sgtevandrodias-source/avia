@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { Image, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { CapturaRapida } from '../components/CapturaRapida';
 import { ItemCard } from '../components/ItemCard';
 import { ProgressoDoDia } from '../components/ProgressoDoDia';
 import { useAuth } from '../auth/AuthContext';
@@ -51,7 +50,6 @@ export function PeriodoScreen({ periodo, titulo }: Props) {
         )}
         <Text style={styles.headerTitulo}>{titulo}</Text>
       </View>
-      <CapturaRapida />
       {periodo === 'hoje' && <ProgressoDoDia feitos={feitosHoje} total={totalHoje} />}
       <SectionList
         sections={secoes}
