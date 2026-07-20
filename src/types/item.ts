@@ -59,10 +59,10 @@ export type NovaCategoria = Omit<CategoriaItem, 'id' | 'ordem' | 'criadoEm' | 'a
   ordem?: number;
 };
 
-/** Categorias custom (criadas pelo usuário) sempre vêm depois das de sistema (ordem 0-8). */
+/** Categorias custom (criadas pelo usuário) sempre vêm depois das de sistema (ordem 0-9). */
 export const ORDEM_CATEGORIA_CUSTOM = 999;
 
-const CATEGORIA_DESCONHECIDA_BASE = { nome: 'Outro', icone: '•', cor: '#9AA3AF', sistema: true, ordem: 8 };
+const CATEGORIA_DESCONHECIDA_BASE = { nome: 'Diversos', icone: '•', cor: '#9AA3AF', sistema: true, ordem: 9 };
 
 /** Busca a categoria pelo id na lista carregada; se não achar (ex.: ainda sincronizando), devolve um fallback seguro. */
 export function categoriaInfo(categorias: CategoriaItem[], categoriaId: string): CategoriaItem {

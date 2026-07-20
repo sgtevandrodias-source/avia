@@ -250,7 +250,22 @@ interface DeteccaoCategoria {
   trecho: string;
 }
 
+// Ordem importa: grupos mais específicos (ex.: aniversário) vêm antes de
+// grupos mais genéricos (ex.: família) porque a busca retorna no primeiro
+// grupo com palavra encontrada — "presente de aniversário pra mãe" precisa
+// bater em "aniversário" antes de bater em "mãe".
 const PALAVRAS_CATEGORIA: { categoria: Categoria; palavras: string[] }[] = [
+  {
+    categoria: 'aniversario',
+    palavras: [
+      'aniversario',
+      'aniversário',
+      'parabenizar',
+      'felicitar',
+      'presente de aniversario',
+      'presente de aniversário',
+    ],
+  },
   {
     categoria: 'trabalho',
     palavras: [
@@ -283,22 +298,11 @@ const PALAVRAS_CATEGORIA: { categoria: Categoria; palavras: string[] }[] = [
   },
   {
     categoria: 'compromisso_fixo',
-    palavras: ['conta', 'boleto', 'fatura', 'imposto', 'aluguel', 'financiamento'],
+    palavras: ['conta', 'boleto', 'fatura', 'imposto', 'aluguel', 'financiamento', 'pagamento', 'orcamento', 'orçamento'],
   },
   {
     categoria: 'social',
-    palavras: [
-      'aniversario',
-      'aniversário',
-      'parabenizar',
-      'felicitar',
-      'presente de aniversario',
-      'presente de aniversário',
-      'festa',
-      'encontro com',
-      'happy hour',
-      'cinema',
-    ],
+    palavras: ['festa', 'encontro com', 'happy hour', 'cinema', 'passeio', 'viagem', 'viajar'],
   },
 ];
 
