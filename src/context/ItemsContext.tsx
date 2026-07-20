@@ -16,6 +16,7 @@ interface ItemsContextValue {
   editarItem: (item: Item) => Promise<void>;
   removerItem: (id: string) => Promise<void>;
   alternarStatus: (id: string) => Promise<void>;
+  alternarPrioridade: (id: string) => Promise<void>;
 }
 
 const ItemsContext = createContext<ItemsContextValue | null>(null);
@@ -123,6 +124,18 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     [itens, sincronizarAgora, gerarProximaOcorrenciaSeNecessario],
   );
 
+  const alternarPrioridade = useCallback(
+    async (id: string) => {
+      const item = itens.find((i) => i.id === id);
+      if (!item) return;
+      const prioridade = !item.prioridade;
+      await db.marcarPrioridade(id, prioridade);
+      setItens((atual) => atual.map((i) => (i.id === id ? { ...i, prioridade } : i)));
+      sincronizarAgora();
+    },
+    [itens, sincronizarAgora],
+  );
+
   return (
     <ItemsContext.Provider
       value={{
@@ -135,6 +148,7 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
         editarItem,
         removerItem,
         alternarStatus,
+        alternarPrioridade,
       }}
     >
       {children}

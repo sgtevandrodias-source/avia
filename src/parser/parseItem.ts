@@ -252,10 +252,6 @@ interface DeteccaoCategoria {
 
 const PALAVRAS_CATEGORIA: { categoria: Categoria; palavras: string[] }[] = [
   {
-    categoria: 'aniversario',
-    palavras: ['aniversario', 'aniversário', 'parabenizar', 'felicitar', 'presente de aniversario', 'presente de aniversário'],
-  },
-  {
     categoria: 'trabalho',
     palavras: [
       'reuniao',
@@ -272,7 +268,38 @@ const PALAVRAS_CATEGORIA: { categoria: Categoria; palavras: string[] }[] = [
       'expediente',
     ],
   },
+  {
+    categoria: 'familia',
+    palavras: ['familia', 'família', 'mae', 'mãe', 'pai', 'filho', 'filha', 'irmao', 'irmão', 'irma', 'irmã'],
+  },
+  {
+    categoria: 'casa',
+    palavras: ['faxina', 'limpeza', 'arrumar a casa', 'lavar roupa', 'mercado', 'supermercado', 'encanador', 'eletricista'],
+  },
   { categoria: 'saude', palavras: ['medico', 'médico', 'consulta', 'exame', 'dentista'] },
+  {
+    categoria: 'estudos',
+    palavras: ['estudar', 'prova', 'faculdade', 'aula', 'curso', 'vestibular', 'enem', 'tcc'],
+  },
+  {
+    categoria: 'compromisso_fixo',
+    palavras: ['conta', 'boleto', 'fatura', 'imposto', 'aluguel', 'financiamento'],
+  },
+  {
+    categoria: 'social',
+    palavras: [
+      'aniversario',
+      'aniversário',
+      'parabenizar',
+      'felicitar',
+      'presente de aniversario',
+      'presente de aniversário',
+      'festa',
+      'encontro com',
+      'happy hour',
+      'cinema',
+    ],
+  },
 ];
 
 function detectarCategoria(textoOriginal: string): DeteccaoCategoria {

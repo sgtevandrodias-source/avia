@@ -54,6 +54,7 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
           icone TEXT NOT NULL,
           cor TEXT NOT NULL,
           sistema INTEGER NOT NULL DEFAULT 0,
+          ordem INTEGER NOT NULL DEFAULT 999,
           criado_em TEXT NOT NULL,
           atualizado_em TEXT NOT NULL
         );
@@ -73,6 +74,11 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
       await db.runAsync(
         `UPDATE items SET lembrete_offset_minutos = lembrete_offset_dias * 1440 WHERE lembrete_offset_minutos IS NULL`,
       );
+      // Migração: destaque de prioridade (item 3 do round de UI/UX) — tarefas
+      // já salvas ficam com prioridade = false (0), sem perder nada.
+      await adicionarColunaSeNaoExistir(db, 'items', 'prioridade', 'INTEGER NOT NULL DEFAULT 0');
+      // Migração: ordem de exibição das categorias (item 5 do mesmo round).
+      await adicionarColunaSeNaoExistir(db, 'categorias', 'ordem', 'INTEGER NOT NULL DEFAULT 999');
       return db;
     });
   }
@@ -91,6 +97,7 @@ interface ItemRow {
   status: Item['status'];
   recorrencia: Item['recorrencia'];
   lembrete_offset_minutos: number;
+  prioridade: number;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -109,6 +116,7 @@ function rowParaItem(row: ItemRow): Item {
     status: row.status,
     recorrencia: row.recorrencia,
     lembreteOffsetMinutos: row.lembrete_offset_minutos,
+    prioridade: row.prioridade === 1,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -128,6 +136,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
   const agora = new Date().toISOString();
   const item: Item = {
     ...novoItem,
+    prioridade: novoItem.prioridade ?? false,
     id: Crypto.randomUUID(),
     status: 'pendente',
     criadoEm: agora,
@@ -137,8 +146,8 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
   await db.runAsync(
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
-      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, criado_em, concluido_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       item.id,
       item.textoOriginal,
@@ -151,6 +160,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
       item.status,
       item.recorrencia,
       item.lembreteOffsetMinutos,
+      item.prioridade ? 1 : 0,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,
@@ -165,7 +175,7 @@ export async function atualizarItem(item: Item): Promise<void> {
   await db.runAsync(
     `UPDATE items SET
       texto_original = ?, titulo = ?, data = ?, hora_compromisso = ?, hora_limite = ?,
-      tipo_horario = ?, categoria = ?, status = ?, recorrencia = ?, lembrete_offset_minutos = ?,
+      tipo_horario = ?, categoria = ?, status = ?, recorrencia = ?, lembrete_offset_minutos = ?, prioridade = ?,
       concluido_em = ?, atualizado_em = ?
     WHERE id = ?`,
     [
@@ -179,6 +189,7 @@ export async function atualizarItem(item: Item): Promise<void> {
       item.status,
       item.recorrencia,
       item.lembreteOffsetMinutos,
+      item.prioridade ? 1 : 0,
       item.concluidoEm,
       atualizadoEm,
       item.id,
@@ -193,6 +204,16 @@ export async function marcarStatus(id: string, status: Item['status']): Promise<
   await db.runAsync('UPDATE items SET status = ?, concluido_em = ?, atualizado_em = ? WHERE id = ?', [
     status,
     concluidoEm,
+    agora,
+    id,
+  ]);
+}
+
+export async function marcarPrioridade(id: string, prioridade: boolean): Promise<void> {
+  const db = await getDb();
+  const agora = new Date().toISOString();
+  await db.runAsync('UPDATE items SET prioridade = ?, atualizado_em = ? WHERE id = ?', [
+    prioridade ? 1 : 0,
     agora,
     id,
   ]);
@@ -214,8 +235,8 @@ export async function upsertItemLocal(item: Item): Promise<void> {
   await db.runAsync(
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
-      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, criado_em, concluido_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       texto_original = excluded.texto_original,
       titulo = excluded.titulo,
@@ -227,6 +248,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       status = excluded.status,
       recorrencia = excluded.recorrencia,
       lembrete_offset_minutos = excluded.lembrete_offset_minutos,
+      prioridade = excluded.prioridade,
       concluido_em = excluded.concluido_em,
       atualizado_em = excluded.atualizado_em`,
     [
@@ -241,6 +263,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       item.status,
       item.recorrencia,
       item.lembreteOffsetMinutos,
+      item.prioridade ? 1 : 0,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,
@@ -294,6 +317,7 @@ interface CategoriaRow {
   icone: string;
   cor: string;
   sistema: number;
+  ordem: number;
   criado_em: string;
   atualizado_em: string;
 }
@@ -305,6 +329,7 @@ function rowParaCategoria(row: CategoriaRow): CategoriaItem {
     icone: row.icone,
     cor: row.cor,
     sistema: row.sistema === 1,
+    ordem: row.ordem,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
   };
@@ -312,17 +337,23 @@ function rowParaCategoria(row: CategoriaRow): CategoriaItem {
 
 export async function listarCategorias(): Promise<CategoriaItem[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<CategoriaRow>('SELECT * FROM categorias ORDER BY criado_em ASC');
+  const rows = await db.getAllAsync<CategoriaRow>('SELECT * FROM categorias ORDER BY ordem ASC, criado_em ASC');
   return rows.map(rowParaCategoria);
 }
 
 export async function criarCategoria(nova: NovaCategoria): Promise<CategoriaItem> {
   const db = await getDb();
   const agora = new Date().toISOString();
-  const categoria: CategoriaItem = { ...nova, id: Crypto.randomUUID(), criadoEm: agora, atualizadoEm: agora };
+  const categoria: CategoriaItem = {
+    ...nova,
+    ordem: nova.ordem ?? 999,
+    id: Crypto.randomUUID(),
+    criadoEm: agora,
+    atualizadoEm: agora,
+  };
   await db.runAsync(
-    'INSERT INTO categorias (id, nome, icone, cor, sistema, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [categoria.id, categoria.nome, categoria.icone, categoria.cor, categoria.sistema ? 1 : 0, categoria.criadoEm, categoria.atualizadoEm],
+    'INSERT INTO categorias (id, nome, icone, cor, sistema, ordem, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [categoria.id, categoria.nome, categoria.icone, categoria.cor, categoria.sistema ? 1 : 0, categoria.ordem, categoria.criadoEm, categoria.atualizadoEm],
   );
   return categoria;
 }
@@ -351,14 +382,15 @@ export async function excluirCategoria(id: string): Promise<void> {
 export async function upsertCategoriaLocal(categoria: CategoriaItem): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO categorias (id, nome, icone, cor, sistema, criado_em, atualizado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO categorias (id, nome, icone, cor, sistema, ordem, criado_em, atualizado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        nome = excluded.nome,
        icone = excluded.icone,
        cor = excluded.cor,
+       ordem = excluded.ordem,
        atualizado_em = excluded.atualizado_em`,
-    [categoria.id, categoria.nome, categoria.icone, categoria.cor, categoria.sistema ? 1 : 0, categoria.criadoEm, categoria.atualizadoEm],
+    [categoria.id, categoria.nome, categoria.icone, categoria.cor, categoria.sistema ? 1 : 0, categoria.ordem, categoria.criadoEm, categoria.atualizadoEm],
   );
 }
 

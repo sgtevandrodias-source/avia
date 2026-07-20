@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS items (
   recorrencia TEXT NOT NULL DEFAULT 'nenhuma', -- 'nenhuma' | 'diaria' | 'semanal' | 'mensal' | 'anual' (só metadado, sem motor de repetição)
   lembrete_offset_dias INTEGER NOT NULL DEFAULT 0, -- legado, ver migration 0004 (lembrete_offset_minutos)
   lembrete_offset_minutos INTEGER NOT NULL DEFAULT 0,
+  prioridade INTEGER NOT NULL DEFAULT 0, -- ver migration 0005
   criado_em TEXT NOT NULL,
   concluido_em TEXT,
   atualizado_em TEXT NOT NULL,

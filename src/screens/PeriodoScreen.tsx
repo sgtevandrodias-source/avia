@@ -1,16 +1,15 @@
 import React, { useMemo } from 'react';
-import { Image, SectionList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ItemCard } from '../components/ItemCard';
 import { ProgressoDoDia } from '../components/ProgressoDoDia';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
-import { useCategorias } from '../context/CategoriasContext';
 import { colors, corPorPeriodo, type PeriodoKey } from '../theme/colors';
 import { fonts } from '../theme/typography';
-import { agruparPorCategoria, itensDoPeriodo, itensFeitosHoje, itensPendentesHoje } from '../utils/periodos';
-import { categoriaInfo, type Item } from '../types/item';
+import { itensDoPeriodo, itensFeitosHoje, itensPendentesHoje, ordenarPorUrgencia } from '../utils/periodos';
+import type { Item } from '../types/item';
 
 interface Props {
   periodo: PeriodoKey;
@@ -19,40 +18,39 @@ interface Props {
 
 export function PeriodoScreen({ periodo, titulo }: Props) {
   const { itens, alternarStatus } = useItems();
-  const { categorias } = useCategorias();
   const { usuario } = useAuth();
   const navigation = useNavigation<any>();
   const corPendente = corPorPeriodo[periodo];
   const primeiroNome = usuario?.nome?.trim().split(/\s+/)[0] ?? '';
 
-  const itensPeriodo = useMemo(() => itensDoPeriodo(itens, periodo), [itens, periodo]);
-
-  const secoes = useMemo(() => {
-    const grupos = agruparPorCategoria(itensPeriodo);
-    return Array.from(grupos.entries()).map(([categoria, dados]) => ({
-      title: categoriaInfo(categorias, categoria).nome,
-      icone: categoriaInfo(categorias, categoria).icone,
-      data: dados,
-    }));
-  }, [itensPeriodo, categorias]);
+  const itensPeriodo = useMemo(
+    () => ordenarPorUrgencia(itensDoPeriodo(itens, periodo)),
+    [itens, periodo],
+  );
 
   const totalHoje = itensPendentesHoje(itens).length + itensFeitosHoje(itens).length;
   const feitosHoje = itensFeitosHoje(itens).length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: corPendente }]}>
         {periodo === 'hoje' && (
           <View style={styles.saudacaoLinha}>
-            <Image source={require('../../assets/icon.png')} style={styles.logoSaudacao} />
+            <Pressable
+              onPress={() => navigation.openDrawer()}
+              style={styles.botaoMenu}
+              hitSlop={8}
+            >
+              <Text style={styles.iconeMenu}>☰</Text>
+            </Pressable>
             <Text style={styles.saudacaoTexto}>Avia, {primeiroNome}!</Text>
           </View>
         )}
         <Text style={styles.headerTitulo}>{titulo}</Text>
       </View>
       {periodo === 'hoje' && <ProgressoDoDia feitos={feitosHoje} total={totalHoje} />}
-      <SectionList
-        sections={secoes}
+      <FlatList
+        data={itensPeriodo}
         keyExtractor={(item: Item) => item.id}
         contentContainerStyle={styles.lista}
         renderItem={({ item }) => (
@@ -62,11 +60,6 @@ export function PeriodoScreen({ periodo, titulo }: Props) {
             onToggle={() => alternarStatus(item.id)}
             onPress={() => navigation.navigate('DetalheItem', { itemId: item.id })}
           />
-        )}
-        renderSectionHeader={({ section }) => (
-          <Text style={styles.secaoTitulo}>
-            {section.icone} {section.title}
-          </Text>
         )}
         ListEmptyComponent={
           <View style={styles.vazio}>
@@ -100,10 +93,19 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 8,
   },
-  logoSaudacao: {
+  botaoMenu: {
     width: 44,
     height: 44,
     borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconeMenu: {
+    fontSize: 22,
+    color: colors.textPrimary,
   },
   saudacaoTexto: {
     fontFamily: fonts.extraBold,
@@ -114,14 +116,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 24,
-  },
-  secaoTitulo: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 12,
-    marginBottom: 6,
-    textTransform: 'uppercase',
   },
   vazio: {
     paddingTop: 60,

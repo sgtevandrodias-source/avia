@@ -18,7 +18,7 @@ export function AtrasadosScreen() {
   const lista = useMemo(() => itensAtrasados(itens), [itens]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Text style={styles.headerTitulo}>Atrasados</Text>
       </View>

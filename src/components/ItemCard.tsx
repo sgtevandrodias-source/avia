@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { format, parseISO } from 'date-fns';
+import * as Haptics from 'expo-haptics';
 import { CheckboxConcluir } from './CheckboxConcluir';
 import { useCategorias } from '../context/CategoriasContext';
+import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { categoriaInfo, type Item } from '../types/item';
@@ -15,6 +17,13 @@ interface Props {
 }
 
 export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
+  const { alternarPrioridade } = useItems();
+
+  const marcarPrioridade = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    alternarPrioridade(item.id);
+  };
+
   const concluido = item.status === 'feito';
   const opacidadeTexto = useRef(new Animated.Value(concluido ? 0.45 : 1)).current;
 
@@ -39,13 +48,18 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           : null;
 
   return (
-    <Pressable onPress={onPress} style={styles.card}>
+    <Pressable
+      onPress={onPress}
+      onLongPress={marcarPrioridade}
+      style={[styles.card, item.prioridade && styles.cardPrioridade]}
+    >
       <CheckboxConcluir concluido={concluido} corPendente={corPendente} onToggle={onToggle} />
       <Animated.View style={[styles.textos, { opacity: opacidadeTexto }]}>
         <Text
           style={[styles.titulo, concluido && styles.tituloConcluido]}
           numberOfLines={2}
         >
+          {item.prioridade ? '⭐ ' : ''}
           {item.titulo}
         </Text>
         <View style={styles.linhaMeta}>
@@ -71,6 +85,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  cardPrioridade: {
+    borderColor: colors.priority,
+    backgroundColor: colors.prioritySoft,
   },
   textos: {
     flex: 1,

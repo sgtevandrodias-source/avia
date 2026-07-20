@@ -20,6 +20,7 @@ interface ItemApi {
   status: string;
   recorrencia: string;
   lembreteOffsetMinutos: number;
+  prioridade: boolean;
   criadoEm: string;
   concluidoEm: string | null;
   atualizadoEm: string;
@@ -38,6 +39,7 @@ interface ItemRow {
   status: string;
   recorrencia: string;
   lembrete_offset_minutos: number;
+  prioridade: number;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -60,6 +62,7 @@ interface CategoriaApi {
   icone: string;
   cor: string;
   sistema: boolean;
+  ordem: number;
   criadoEm: string;
   atualizadoEm: string;
   excluido?: boolean;
@@ -72,6 +75,7 @@ interface CategoriaRow {
   icone: string;
   cor: string;
   sistema: number;
+  ordem: number;
   criado_em: string;
   atualizado_em: string;
   excluido: number;
@@ -103,6 +107,7 @@ function rowParaApi(row: ItemRow): ItemApi {
     status: row.status,
     recorrencia: row.recorrencia,
     lembreteOffsetMinutos: row.lembrete_offset_minutos,
+    prioridade: row.prioridade === 1,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -121,6 +126,7 @@ function categoriaRowParaApi(row: CategoriaRow): CategoriaApi {
     icone: row.icone,
     cor: row.cor,
     sistema: row.sistema === 1,
+    ordem: row.ordem,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
     excluido: row.excluido === 1,
@@ -147,12 +153,13 @@ async function upsertCategoriaComLWW(
 
   await db
     .prepare(
-      `INSERT INTO categorias (id, usuario_id, nome, icone, cor, sistema, criado_em, atualizado_em, excluido)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO categorias (id, usuario_id, nome, icone, cor, sistema, ordem, criado_em, atualizado_em, excluido)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id, usuario_id) DO UPDATE SET
          nome = excluded.nome,
          icone = excluded.icone,
          cor = excluded.cor,
+         ordem = excluded.ordem,
          atualizado_em = excluded.atualizado_em,
          excluido = excluded.excluido`,
     )
@@ -163,6 +170,7 @@ async function upsertCategoriaComLWW(
       categoria.icone,
       categoria.cor,
       existente?.sistema ? 1 : categoria.sistema ? 1 : 0,
+      categoria.ordem ?? existente?.ordem ?? 999,
       categoria.criadoEm,
       categoria.atualizadoEm,
       categoria.excluido ? 1 : 0,
@@ -196,9 +204,9 @@ async function upsertComLWW(
     .prepare(
       `INSERT INTO items (
         id, texto_original, titulo, data, hora_compromisso, hora_limite,
-        tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos,
+        tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade,
         criado_em, concluido_em, atualizado_em, excluido, usuario_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         texto_original = excluded.texto_original,
         titulo = excluded.titulo,
@@ -210,6 +218,7 @@ async function upsertComLWW(
         status = excluded.status,
         recorrencia = excluded.recorrencia,
         lembrete_offset_minutos = excluded.lembrete_offset_minutos,
+        prioridade = excluded.prioridade,
         concluido_em = excluded.concluido_em,
         atualizado_em = excluded.atualizado_em,
         excluido = excluded.excluido
@@ -227,6 +236,7 @@ async function upsertComLWW(
       item.status,
       item.recorrencia,
       item.lembreteOffsetMinutos,
+      item.prioridade ? 1 : 0,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,
@@ -337,9 +347,9 @@ async function tratarCategorias(
           usuarioId,
           since,
         )
-      : env.DB.prepare('SELECT * FROM categorias WHERE usuario_id = ? AND excluido = 0 ORDER BY criado_em ASC').bind(
-          usuarioId,
-        );
+      : env.DB.prepare(
+          'SELECT * FROM categorias WHERE usuario_id = ? AND excluido = 0 ORDER BY ordem ASC, criado_em ASC',
+        ).bind(usuarioId);
     const { results } = await stmt.all<CategoriaRow>();
     return json(results.map(categoriaRowParaApi));
   }

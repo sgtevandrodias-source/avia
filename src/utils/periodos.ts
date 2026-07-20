@@ -75,6 +75,19 @@ export function itensAtrasados(itens: Item[]): Item[] {
     .sort((a, b) => dataHoraLimiteDoItem(a).getTime() - dataHoraLimiteDoItem(b).getTime());
 }
 
+/**
+ * Ordena por urgência: quem tem horário mais próximo (ou mais atrasado) vem
+ * primeiro; itens sem horário específico resolvem pro fim do dia (ver
+ * `dataHoraLimiteDoItem`), então naturalmente ficam depois dos itens com
+ * horário do mesmo dia. Não precisa de timer pra "recalcular com o tempo" —
+ * a ordem relativa entre dois itens é fixa (vem da data/hora agendada de
+ * cada um), então qualquer re-render (item novo, editado, ou só o relógio
+ * virando pro próximo dia) já reflete a ordem certa.
+ */
+export function ordenarPorUrgencia(itens: Item[]): Item[] {
+  return [...itens].sort((a, b) => dataHoraLimiteDoItem(a).getTime() - dataHoraLimiteDoItem(b).getTime());
+}
+
 export function agruparPorCategoria(itens: Item[]): Map<Item['categoria'], Item[]> {
   const grupos = new Map<Item['categoria'], Item[]>();
   for (const item of itens) {

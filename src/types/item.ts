@@ -22,12 +22,15 @@ export interface Item {
   status: Status;
   recorrencia: Recorrencia;
   lembreteOffsetMinutos: number; // 0 = no horário do evento; >0 = minutos de antecedência
+  prioridade: boolean; // destaque visual — não afeta a ordenação por horário
   criadoEm: string; // ISO datetime
   concluidoEm: string | null; // ISO datetime
   atualizadoEm: string; // ISO datetime — usado pela sincronização (last write wins)
 }
 
-export type NovoItem = Omit<Item, 'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm'>;
+export type NovoItem = Omit<Item, 'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm' | 'prioridade'> & {
+  prioridade?: boolean;
+};
 
 export const PRESETS_LEMBRETE: { minutos: number; label: string }[] = [
   { minutos: 0, label: 'No horário' },
@@ -47,13 +50,19 @@ export interface CategoriaItem {
   icone: string;
   cor: string;
   sistema: boolean;
+  ordem: number; // ordem de exibição — categorias de sistema têm valores fixos, custom ficam depois
   criadoEm: string;
   atualizadoEm: string;
 }
 
-export type NovaCategoria = Omit<CategoriaItem, 'id' | 'criadoEm' | 'atualizadoEm'>;
+export type NovaCategoria = Omit<CategoriaItem, 'id' | 'ordem' | 'criadoEm' | 'atualizadoEm'> & {
+  ordem?: number;
+};
 
-const CATEGORIA_DESCONHECIDA_BASE = { nome: 'Outro', icone: '•', cor: '#9AA3AF', sistema: true };
+/** Categorias custom (criadas pelo usuário) sempre vêm depois das de sistema (ordem 0-8). */
+export const ORDEM_CATEGORIA_CUSTOM = 999;
+
+const CATEGORIA_DESCONHECIDA_BASE = { nome: 'Outro', icone: '•', cor: '#9AA3AF', sistema: true, ordem: 8 };
 
 /** Busca a categoria pelo id na lista carregada; se não achar (ex.: ainda sincronizando), devolve um fallback seguro. */
 export function categoriaInfo(categorias: CategoriaItem[], categoriaId: string): CategoriaItem {

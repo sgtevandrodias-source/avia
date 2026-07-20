@@ -30,6 +30,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
   const agora = new Date().toISOString();
   const item: Item = {
     ...novoItem,
+    prioridade: novoItem.prioridade ?? false,
     id: Crypto.randomUUID(),
     status: 'pendente',
     criadoEm: agora,
@@ -54,6 +55,12 @@ export async function marcarStatus(id: string, status: Item['status']): Promise<
     concluidoEm: status === 'feito' ? agora : null,
     atualizadoEm: agora,
   };
+  await request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
+}
+
+export async function marcarPrioridade(id: string, prioridade: boolean): Promise<void> {
+  const atual = await request<Item>(`/items/${id}`);
+  const atualizado: Item = { ...atual, prioridade, atualizadoEm: new Date().toISOString() };
   await request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
 }
 
@@ -83,7 +90,13 @@ export async function listarCategorias(): Promise<CategoriaItem[]> {
 
 export async function criarCategoria(nova: NovaCategoria): Promise<CategoriaItem> {
   const agora = new Date().toISOString();
-  const categoria: CategoriaItem = { ...nova, id: Crypto.randomUUID(), criadoEm: agora, atualizadoEm: agora };
+  const categoria: CategoriaItem = {
+    ...nova,
+    ordem: nova.ordem ?? 999,
+    id: Crypto.randomUUID(),
+    criadoEm: agora,
+    atualizadoEm: agora,
+  };
   await request('/categorias', { method: 'POST', body: JSON.stringify(categoria) });
   return categoria;
 }

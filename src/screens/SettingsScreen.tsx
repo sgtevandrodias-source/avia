@@ -85,7 +85,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <Text style={styles.titulo}>Configurações</Text>
 
       <Text style={styles.secao}>Conta</Text>

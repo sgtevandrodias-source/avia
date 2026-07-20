@@ -19,6 +19,9 @@ export const colors = {
 
   danger: '#E64A3B',
   white: '#FFFFFF',
+
+  priority: '#FFC107',
+  prioritySoft: '#FFF8E1',
 } as const;
 
 export type PeriodoKey = 'hoje' | 'amanha' | 'quinzena' | 'mes';
