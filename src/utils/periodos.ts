@@ -25,7 +25,20 @@ function intervaloDoPeriodo(periodo: PeriodoKey): { inicio: Date; fim: Date } {
   }
 }
 
+/**
+ * "Hoje" traz todo pendente com data de hoje OU ANTERIOR (rollover) — um
+ * item atrasado (ex.: recorrente não concluído no dia certo) continua
+ * aparecendo aqui, dia após dia, até ser concluído, sem que a `data`
+ * guardada no item seja alterada (isso é só regra de exibição — ver Fase 1
+ * do prompt, que depende de `item.data` nunca mudar pra calcular a próxima
+ * ocorrência corretamente). Os demais períodos continuam com intervalo
+ * exato, sem rollover (não se sobrepõem entre si nem com Hoje).
+ */
 export function itensDoPeriodo(itens: Item[], periodo: PeriodoKey): Item[] {
+  if (periodo === 'hoje') {
+    const hoje = startOfDay(new Date());
+    return itens.filter((item) => item.status === 'pendente' && startOfDay(parseISO(item.data)) <= hoje);
+  }
   const { inicio, fim } = intervaloDoPeriodo(periodo);
   return itens.filter((item) => {
     if (item.status === 'feito') return false;
@@ -36,7 +49,30 @@ export function itensDoPeriodo(itens: Item[], periodo: PeriodoKey): Item[] {
 
 export function itensFeitosHoje(itens: Item[]): Item[] {
   const hoje = hojeISO();
-  return itens.filter((item) => item.status === 'feito' && item.concluidoEm?.startsWith(hoje));
+  // `concluidoEm` é gravado em UTC (toISOString); comparar o prefixo da
+  // string com a data local (hojeISO) dá falso negativo perto da virada do
+  // dia em UTC pra quem está em fuso atrás — por isso converte pra data
+  // local antes de comparar, em vez de comparar a string bruta.
+  return itens.filter(
+    (item) => item.status === 'feito' && item.concluidoEm && format(parseISO(item.concluidoEm), 'yyyy-MM-dd') === hoje,
+  );
+}
+
+/**
+ * Itens concluídos "daquele período": pra Hoje, quem foi concluído hoje
+ * (`itensFeitosHoje` — importa a data de conclusão, não a data original,
+ * senão um item atrasado concluído hoje desapareceria da lista em vez de
+ * aparecer riscado); pros demais períodos, quem tem a data original dentro
+ * do intervalo do período e já está concluído.
+ */
+export function itensConcluidosDoPeriodo(itens: Item[], periodo: PeriodoKey): Item[] {
+  if (periodo === 'hoje') return itensFeitosHoje(itens);
+  const { inicio, fim } = intervaloDoPeriodo(periodo);
+  return itens.filter((item) => {
+    if (item.status !== 'feito') return false;
+    const data = startOfDay(parseISO(item.data));
+    return isWithinInterval(data, { start: inicio, end: fim });
+  });
 }
 
 export function itensPendentesHoje(itens: Item[]): Item[] {
@@ -76,16 +112,20 @@ export function itensAtrasados(itens: Item[]): Item[] {
 }
 
 /**
- * Ordena por urgência: quem tem horário mais próximo (ou mais atrasado) vem
- * primeiro; itens sem horário específico resolvem pro fim do dia (ver
- * `dataHoraLimiteDoItem`), então naturalmente ficam depois dos itens com
- * horário do mesmo dia. Não precisa de timer pra "recalcular com o tempo" —
- * a ordem relativa entre dois itens é fixa (vem da data/hora agendada de
- * cada um), então qualquer re-render (item novo, editado, ou só o relógio
- * virando pro próximo dia) já reflete a ordem certa.
+ * Ordena por prioridade primeiro (prioritários todos antes dos demais) e,
+ * dentro de cada grupo, por urgência: quem tem horário mais próximo (ou mais
+ * atrasado) vem primeiro; itens sem horário específico resolvem pro fim do
+ * dia (ver `dataHoraLimiteDoItem`), então naturalmente ficam depois dos itens
+ * com horário do mesmo dia. Não precisa de timer pra "recalcular com o
+ * tempo" — a ordem relativa entre dois itens é fixa (vem da prioridade e da
+ * data/hora agendada de cada um), então qualquer re-render (item novo,
+ * editado, ou só o relógio virando pro próximo dia) já reflete a ordem certa.
  */
 export function ordenarPorUrgencia(itens: Item[]): Item[] {
-  return [...itens].sort((a, b) => dataHoraLimiteDoItem(a).getTime() - dataHoraLimiteDoItem(b).getTime());
+  return [...itens].sort((a, b) => {
+    if (a.prioridade !== b.prioridade) return a.prioridade ? -1 : 1;
+    return dataHoraLimiteDoItem(a).getTime() - dataHoraLimiteDoItem(b).getTime();
+  });
 }
 
 export function agruparPorCategoria(itens: Item[]): Map<Item['categoria'], Item[]> {

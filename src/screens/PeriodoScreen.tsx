@@ -8,7 +8,13 @@ import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { colors, corPorPeriodo, type PeriodoKey } from '../theme/colors';
 import { fonts } from '../theme/typography';
-import { itensDoPeriodo, itensFeitosHoje, itensPendentesHoje, ordenarPorUrgencia } from '../utils/periodos';
+import {
+  itensConcluidosDoPeriodo,
+  itensDoPeriodo,
+  itensFeitosHoje,
+  itensPendentesHoje,
+  ordenarPorUrgencia,
+} from '../utils/periodos';
 import type { Item } from '../types/item';
 
 interface Props {
@@ -23,10 +29,14 @@ export function PeriodoScreen({ periodo, titulo }: Props) {
   const corPendente = corPorPeriodo[periodo];
   const primeiroNome = usuario?.nome?.trim().split(/\s+/)[0] ?? '';
 
-  const itensPeriodo = useMemo(
-    () => ordenarPorUrgencia(itensDoPeriodo(itens, periodo)),
-    [itens, periodo],
-  );
+  // Pendentes (ordenados por prioridade + urgência) seguidos dos concluídos
+  // daquele período — concluídos não somem da lista principal, só ficam por
+  // último (o ItemCard já aplica o risco no título).
+  const itensPeriodo = useMemo(() => {
+    const pendentes = ordenarPorUrgencia(itensDoPeriodo(itens, periodo));
+    const concluidos = ordenarPorUrgencia(itensConcluidosDoPeriodo(itens, periodo));
+    return [...pendentes, ...concluidos];
+  }, [itens, periodo]);
 
   const totalHoje = itensPendentesHoje(itens).length + itensFeitosHoje(itens).length;
   const feitosHoje = itensFeitosHoje(itens).length;
