@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
+    "@expo/vector-icons": "^15.1.1",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@react-navigation/bottom-tabs": "^7.18.11",

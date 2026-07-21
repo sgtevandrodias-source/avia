@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
@@ -64,8 +65,9 @@ export function CapturaRapida() {
   });
 
   const lidarComSubmit = () => {
-    if (!texto.trim()) return;
-    setResultado(parseItem(texto, categorias));
+    const textoLimpo = texto.trim();
+    if (!textoLimpo) return;
+    setResultado(parseItem(textoLimpo, categorias));
   };
 
   const alternarDitado = async () => {
@@ -160,8 +162,20 @@ export function CapturaRapida() {
         value={texto}
         onChangeText={setTexto}
         onSubmitEditing={lidarComSubmit}
+        onKeyPress={(e: any) => {
+          // Campo multiline: por padrão o Enter só quebra linha (não dispara
+          // onSubmitEditing). Shift+Enter continua inserindo quebra de linha
+          // de propósito; Enter sozinho confirma, igual antes de virar multiline.
+          if (e.nativeEvent?.key === 'Enter' && !e.nativeEvent?.shiftKey) {
+            e.preventDefault?.();
+            e.nativeEvent?.preventDefault?.();
+            lidarComSubmit();
+          }
+        }}
         returnKeyType="done"
         editable={!ouvindo}
+        multiline
+        textAlignVertical="top"
       />
       <Pressable onPress={alternarDitado} hitSlop={8}>
         <Animated.View
@@ -171,7 +185,7 @@ export function CapturaRapida() {
             { transform: [{ scale: escalaPulso }] },
           ]}
         >
-          <Text style={styles.botaoMicTexto}>🎤</Text>
+          <Ionicons name="mic" size={22} color={colors.white} />
         </Animated.View>
       </Pressable>
       <Pressable style={styles.botaoAdicionar} onPress={lidarComSubmit}>
@@ -184,7 +198,7 @@ export function CapturaRapida() {
 const styles = StyleSheet.create({
   wrapper: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -197,26 +211,28 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 15,
     backgroundColor: colors.background,
-    borderRadius: 12,
+    borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    minHeight: 48,
+    maxHeight: 100,
     color: colors.textPrimary,
   },
   botaoMic: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.background,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.urgentHoje,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   botaoMicAtivo: {
-    backgroundColor: colors.urgentHoje,
-    borderColor: colors.urgentHoje,
+    shadowColor: colors.urgentHoje,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  botaoMicTexto: { fontSize: 18 },
   botaoAdicionar: {
     width: 40,
     height: 40,
