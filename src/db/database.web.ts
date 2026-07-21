@@ -32,6 +32,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
     ...novoItem,
     prioridade: novoItem.prioridade ?? false,
     origemRecorrenciaId: novoItem.origemRecorrenciaId ?? null,
+    recorrenciaGeradaAte: null,
     id: Crypto.randomUUID(),
     status: 'pendente',
     criadoEm: agora,
@@ -62,6 +63,13 @@ export async function marcarStatus(id: string, status: Item['status']): Promise<
 export async function marcarPrioridade(id: string, prioridade: boolean): Promise<void> {
   const atual = await request<Item>(`/items/${id}`);
   const atualizado: Item = { ...atual, prioridade, atualizadoEm: new Date().toISOString() };
+  await request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
+}
+
+export async function marcarRecorrenciaGeradaAte(id: string, data: string): Promise<void> {
+  const atual = await request<Item>(`/items/${id}`);
+  if (atual.recorrenciaGeradaAte && atual.recorrenciaGeradaAte >= data) return;
+  const atualizado: Item = { ...atual, recorrenciaGeradaAte: data, atualizadoEm: new Date().toISOString() };
   await request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
 }
 

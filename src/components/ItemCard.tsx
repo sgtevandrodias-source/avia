@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import * as Haptics from 'expo-haptics';
 import { CheckboxConcluir } from './CheckboxConcluir';
@@ -8,6 +9,7 @@ import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { dataHoraLimiteDoItem } from '../utils/periodos';
+import { confirmar } from '../utils/confirm';
 import { categoriaInfo, type Item } from '../types/item';
 
 interface Props {
@@ -18,11 +20,17 @@ interface Props {
 }
 
 export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
-  const { alternarPrioridade } = useItems();
+  const { alternarPrioridade, removerItem } = useItems();
 
   const marcarPrioridade = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     alternarPrioridade(item.id);
+  };
+
+  const excluir = () => {
+    confirmar('Excluir item', `Tem certeza que deseja excluir "${item.titulo}"?`, () => {
+      removerItem(item.id);
+    });
   };
 
   const concluido = item.status === 'feito';
@@ -75,6 +83,9 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           {atrasado && <Text style={styles.avisoAtrasado}>⚠️ Atrasado</Text>}
         </View>
       </Animated.View>
+      <Pressable onPress={excluir} hitSlop={8} style={styles.botaoExcluir}>
+        <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
+      </Pressable>
     </Pressable>
   );
 }
@@ -103,6 +114,10 @@ const styles = StyleSheet.create({
   },
   textos: {
     flex: 1,
+  },
+  botaoExcluir: {
+    padding: 6,
+    alignSelf: 'flex-start',
   },
   titulo: {
     fontFamily: fonts.medium,

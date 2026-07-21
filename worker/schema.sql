@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS items (
   lembrete_offset_minutos INTEGER NOT NULL DEFAULT 0,
   prioridade INTEGER NOT NULL DEFAULT 0, -- ver migration 0005
   origem_recorrencia_id TEXT, -- ver migration 0008: id do item raiz da série recorrente
+  recorrencia_gerada_ate TEXT, -- ver migration 0009: bookmark de geração, só usado na raiz
   criado_em TEXT NOT NULL,
   concluido_em TEXT,
   atualizado_em TEXT NOT NULL,

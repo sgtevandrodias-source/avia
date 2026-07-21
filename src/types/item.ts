@@ -27,6 +27,11 @@ export interface Item {
   // se este item não for uma ocorrência gerada (é ele mesmo a raiz, ou não repete).
   // Usado pra achar todas as ocorrências já geradas de uma série e evitar duplicar.
   origemRecorrenciaId: string | null;
+  // Só usado no item RAIZ de uma série: até que data as ocorrências já foram
+  // geradas (mesmo que a ocorrência daquela data tenha sido apagada depois).
+  // Sem isso, apagar a ocorrência mais recente de uma série faz ela "voltar"
+  // no próximo carregamento — ver gerarOcorrenciasPendentes em recorrencia.ts.
+  recorrenciaGeradaAte: string | null;
   criadoEm: string; // ISO datetime
   concluidoEm: string | null; // ISO datetime
   atualizadoEm: string; // ISO datetime — usado pela sincronização (last write wins)
@@ -34,7 +39,14 @@ export interface Item {
 
 export type NovoItem = Omit<
   Item,
-  'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm' | 'prioridade' | 'origemRecorrenciaId'
+  | 'id'
+  | 'status'
+  | 'criadoEm'
+  | 'concluidoEm'
+  | 'atualizadoEm'
+  | 'prioridade'
+  | 'origemRecorrenciaId'
+  | 'recorrenciaGeradaAte'
 > & {
   prioridade?: boolean;
   origemRecorrenciaId?: string | null;

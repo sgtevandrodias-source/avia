@@ -43,12 +43,26 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   // conferem se a data já existe na série antes de criar.
   const recarregar = useCallback(async () => {
     const lista = await db.listarItens();
-    const novasOcorrencias = gerarOcorrenciasPendentes(lista);
-    for (const novoItem of novasOcorrencias) {
-      const criado = await db.criarItem(novoItem);
-      agendarNotificacaoDoItem(criado).catch(() => {});
+    const { series } = gerarOcorrenciasPendentes(lista);
+    let criouAlgo = false;
+    for (const serie of series) {
+      const idsParaAtualizar = [...serie.idsExistentesParaAtualizar];
+      for (const novoItem of serie.novasOcorrencias) {
+        const criado = await db.criarItem(novoItem);
+        agendarNotificacaoDoItem(criado).catch(() => {});
+        idsParaAtualizar.push(criado.id);
+        criouAlgo = true;
+      }
+      // Bookmark de até onde a série já foi gerada — grava em TODO item da
+      // série (os que já existiam e os recém-criados agora), mesmo que a
+      // ocorrência correspondente venha a ser apagada depois (é isso que
+      // evita ela "voltar" no próximo carregamento, mesmo se a raiz for uma
+      // das apagadas).
+      for (const id of idsParaAtualizar) {
+        await db.marcarRecorrenciaGeradaAte(id, serie.recorrenciaGeradaAte);
+      }
     }
-    setItens(novasOcorrencias.length > 0 ? await db.listarItens() : lista);
+    setItens(criouAlgo ? await db.listarItens() : lista);
   }, []);
 
   const sincronizarAgora = useCallback(async () => {
@@ -98,13 +112,21 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   // data original — não da data de hoje, pra não acumular atraso quando o
   // item é concluído fora do dia previsto). Confere antes se essa data já
   // não foi gerada pelo gatilho por tempo (Fase 1), pra não duplicar quando
-  // os dois gatilhos coincidem no mesmo dia.
+  // os dois gatilhos coincidem no mesmo dia. Também avança o bookmark em
+  // todo item sobrevivente da série (mesmo mecanismo do gatilho por tempo),
+  // pra que apagar essa ocorrência depois não a faça "voltar" — mesmo que a
+  // raiz seja uma das que já foram apagadas.
   const gerarProximaOcorrenciaSeNecessario = useCallback(
-    (item: Item) => {
+    async (item: Item) => {
       const proximaData = proximaDataRecorrencia(item.data, item.recorrencia);
       if (!proximaData) return;
-      if (existeOcorrenciaNaSerie(itens, raizDaSerie(item), proximaData)) return;
-      adicionarItem(proximaOcorrencia(item, proximaData));
+      const raizId = raizDaSerie(item);
+      if (existeOcorrenciaNaSerie(itens, raizId, proximaData)) return;
+      const novoItem = await adicionarItem(proximaOcorrencia(item, proximaData));
+      const idsDaSerie = itens.filter((i) => raizDaSerie(i) === raizId).map((i) => i.id);
+      for (const id of [...idsDaSerie, novoItem.id]) {
+        db.marcarRecorrenciaGeradaAte(id, proximaData);
+      }
     },
     [itens, adicionarItem],
   );

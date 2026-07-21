@@ -84,6 +84,9 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
       // própria série (comportamento correto pra quem não tinha ocorrências
       // geradas ainda).
       await adicionarColunaSeNaoExistir(db, 'items', 'origem_recorrencia_id', 'TEXT');
+      // Migração: bookmark de até onde uma série recorrente já foi gerada
+      // (corrige bug de ocorrência apagada "voltar" — ver recorrencia.ts).
+      await adicionarColunaSeNaoExistir(db, 'items', 'recorrencia_gerada_ate', 'TEXT');
       return db;
     });
   }
@@ -104,6 +107,7 @@ interface ItemRow {
   lembrete_offset_minutos: number;
   prioridade: number;
   origem_recorrencia_id: string | null;
+  recorrencia_gerada_ate: string | null;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -124,6 +128,7 @@ function rowParaItem(row: ItemRow): Item {
     lembreteOffsetMinutos: row.lembrete_offset_minutos,
     prioridade: row.prioridade === 1,
     origemRecorrenciaId: row.origem_recorrencia_id,
+    recorrenciaGeradaAte: row.recorrencia_gerada_ate,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -145,6 +150,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
     ...novoItem,
     prioridade: novoItem.prioridade ?? false,
     origemRecorrenciaId: novoItem.origemRecorrenciaId ?? null,
+    recorrenciaGeradaAte: null,
     id: Crypto.randomUUID(),
     status: 'pendente',
     criadoEm: agora,
@@ -155,8 +161,8 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
       tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, origem_recorrencia_id,
-      criado_em, concluido_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      recorrencia_gerada_ate, criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       item.id,
       item.textoOriginal,
@@ -171,6 +177,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
       item.lembreteOffsetMinutos,
       item.prioridade ? 1 : 0,
       item.origemRecorrenciaId,
+      item.recorrenciaGeradaAte,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,
@@ -229,6 +236,17 @@ export async function marcarPrioridade(id: string, prioridade: boolean): Promise
   ]);
 }
 
+/** Avança o bookmark de recorrência da raiz — nunca deixa ele "voltar" (guarda contra escritas fora de ordem). */
+export async function marcarRecorrenciaGeradaAte(id: string, data: string): Promise<void> {
+  const db = await getDb();
+  const agora = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE items SET recorrencia_gerada_ate = ?, atualizado_em = ?
+     WHERE id = ? AND (recorrencia_gerada_ate IS NULL OR recorrencia_gerada_ate < ?)`,
+    [data, agora, id, data],
+  );
+}
+
 export async function excluirItem(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM items WHERE id = ?', [id]);
@@ -246,8 +264,8 @@ export async function upsertItemLocal(item: Item): Promise<void> {
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
       tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, origem_recorrencia_id,
-      criado_em, concluido_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      recorrencia_gerada_ate, criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       texto_original = excluded.texto_original,
       titulo = excluded.titulo,
@@ -261,6 +279,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       lembrete_offset_minutos = excluded.lembrete_offset_minutos,
       prioridade = excluded.prioridade,
       origem_recorrencia_id = excluded.origem_recorrencia_id,
+      recorrencia_gerada_ate = excluded.recorrencia_gerada_ate,
       concluido_em = excluded.concluido_em,
       atualizado_em = excluded.atualizado_em`,
     [
@@ -277,6 +296,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       item.lembreteOffsetMinutos,
       item.prioridade ? 1 : 0,
       item.origemRecorrenciaId,
+      item.recorrenciaGeradaAte,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,

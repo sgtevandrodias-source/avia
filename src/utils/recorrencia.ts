@@ -47,6 +47,24 @@ export function proximaOcorrencia(item: Item, novaData: string): NovoItem {
 
 const MAX_GERACOES_POR_SERIE = 60;
 
+export interface ResultadoSerieRecorrente {
+  novasOcorrencias: NovoItem[];
+  // ids dos itens que JÁ EXISTIAM nessa série antes desta chamada — também
+  // precisam receber o bookmark abaixo (não só os recém-criados).
+  idsExistentesParaAtualizar: string[];
+  // Até que data a série foi gerada nesta passada. Precisa ser gravado em
+  // TODO item da série (os existentes acima E os recém-criados, depois que o
+  // chamador tiver os ids reais deles) — não só na raiz. Sem isso, apagar a
+  // ocorrência mais recente (ou a própria raiz) expõe uma data mais antiga
+  // como a mais recente sobrevivente, que já passou, fazendo o gerador
+  // recriar a ocorrência que foi apagada.
+  recorrenciaGeradaAte: string;
+}
+
+export interface ResultadoGeracaoRecorrencia {
+  series: ResultadoSerieRecorrente[];
+}
+
 /**
  * Gera, pra cada série recorrente, todas as ocorrências que faltam desde a
  * última existente até hoje — sem depender do usuário ter concluído nenhuma
@@ -60,10 +78,19 @@ const MAX_GERACOES_POR_SERIE = 60;
  * Idempotente: nunca gera uma ocorrência pra uma data que a série já tem
  * (comparando pelo id raiz da série, não por título/categoria — assim
  * continua correto mesmo se o usuário editar o título de uma ocorrência).
+ *
+ * O ponto de partida de cada série é o MAIOR entre (a) o bookmark
+ * `recorrenciaGeradaAte` de qualquer item sobrevivente da série e (b) a
+ * maior data entre as ocorrências sobreviventes — nunca só a segunda opção,
+ * senão apagar a ocorrência mais recente de uma série (ou a própria raiz) a
+ * faz ser gerada de novo no próximo carregamento. Não grava o bookmark
+ * diretamente (é só uma função pura) — devolve o que precisa ser gravado
+ * pro chamador (ItemsContext.tsx) fazer isso depois de criar as novas
+ * ocorrências, já que só ele sabe os ids reais delas.
  */
-export function gerarOcorrenciasPendentes(itens: Item[]): NovoItem[] {
+export function gerarOcorrenciasPendentes(itens: Item[]): ResultadoGeracaoRecorrencia {
   const agora = new Date();
-  const geradas: NovoItem[] = [];
+  const series: ResultadoSerieRecorrente[] = [];
 
   const seriePorRaiz = new Map<string, Item[]>();
   for (const item of itens) {
@@ -74,27 +101,46 @@ export function gerarOcorrenciasPendentes(itens: Item[]): NovoItem[] {
     seriePorRaiz.set(raizId, lista);
   }
 
-  for (const [raizId, serie] of seriePorRaiz) {
-    const tip = serie.reduce((maisRecente, atual) => (atual.data > maisRecente.data ? atual : maisRecente));
-    const datasExistentes = new Set(serie.map((i) => i.data));
+  for (const serie of seriePorRaiz.values()) {
+    const modelo = serie.reduce((maisRecente, atual) => (atual.data > maisRecente.data ? atual : maisRecente));
+    const maiorDataSobrevivente = modelo.data;
+    const maiorBookmarkSobrevivente = serie.reduce<string | null>((maior, item) => {
+      if (!item.recorrenciaGeradaAte) return maior;
+      return !maior || item.recorrenciaGeradaAte > maior ? item.recorrenciaGeradaAte : maior;
+    }, null);
+    let dataAtual =
+      maiorBookmarkSobrevivente && maiorBookmarkSobrevivente > maiorDataSobrevivente
+        ? maiorBookmarkSobrevivente
+        : maiorDataSobrevivente;
 
-    let dataAtual = tip.data;
+    const datasExistentes = new Set(serie.map((i) => i.data));
+    const novasOcorrencias: NovoItem[] = [];
     let geracoes = 0;
+    let bookmarkAvancou = false;
     while (geracoes < MAX_GERACOES_POR_SERIE) {
-      const limiteDaDataAtual = dataHoraLimiteDoItem({ ...tip, data: dataAtual });
+      const limiteDaDataAtual = dataHoraLimiteDoItem({ ...modelo, data: dataAtual });
       if (limiteDaDataAtual >= agora) break;
 
-      const proximaData = proximaDataRecorrencia(dataAtual, tip.recorrencia);
+      const proximaData = proximaDataRecorrencia(dataAtual, modelo.recorrencia);
       if (!proximaData) break;
 
       if (!datasExistentes.has(proximaData)) {
-        geradas.push(proximaOcorrencia(tip, proximaData));
+        novasOcorrencias.push(proximaOcorrencia(modelo, proximaData));
         datasExistentes.add(proximaData);
       }
       dataAtual = proximaData;
+      bookmarkAvancou = true;
       geracoes += 1;
+    }
+
+    if (bookmarkAvancou) {
+      series.push({
+        novasOcorrencias,
+        idsExistentesParaAtualizar: serie.map((i) => i.id),
+        recorrenciaGeradaAte: dataAtual,
+      });
     }
   }
 
-  return geradas;
+  return { series };
 }
