@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { API_URL } from '../sync/config';
 import { prepararSessaoParaUsuario } from '../sync/sync';
 import { googleDisponivel, loginComGoogleNativo } from './googleSignIn';
-import { definirTokenAtual } from './sessionToken';
+import { definirTokenAtual, obterTokenAtual } from './sessionToken';
 import { lerSessao, limparSessao, salvarSessao } from './tokenStorage';
 
 export interface Usuario {
@@ -25,6 +25,7 @@ interface AuthContextValue {
   registrar: (email: string, senha: string, nome: string) => Promise<void>;
   login: (email: string, senha: string) => Promise<void>;
   loginComGoogle: () => Promise<void>;
+  definirSenha: (senha: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -115,6 +116,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [salvar]);
 
+  const definirSenha = useCallback(async (senha: string) => {
+    setErro(null);
+    const resposta = await fetch(`${API_URL}/usuario/senha`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${obterTokenAtual()}`,
+      },
+      body: JSON.stringify({ senha }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      const mensagem = dados?.erro ?? 'Não foi possível definir a senha.';
+      setErro(mensagem);
+      throw new Error(mensagem);
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     await limparSessao();
     definirTokenAtual(null);
@@ -133,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         registrar,
         login,
         loginComGoogle,
+        definirSenha,
         logout,
       }}
     >

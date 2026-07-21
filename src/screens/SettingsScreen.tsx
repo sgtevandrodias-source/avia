@@ -37,16 +37,41 @@ interface EditorEstado {
 
 export function SettingsScreen() {
   const { sincronizando, sincronizarAgora } = useItems();
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, definirSenha } = useAuth();
   const { categorias, adicionarCategoria, editarCategoria, removerCategoria } = useCategorias();
   const { itens, editarItem } = useItems();
   const [editor, setEditor] = useState<EditorEstado | null>(null);
   const [nome, setNome] = useState('');
   const [icone, setIcone] = useState('');
   const [cor, setCor] = useState(PALETA_CORES[0]);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmaSenha, setConfirmaSenha] = useState('');
+  const [salvandoSenha, setSalvandoSenha] = useState(false);
 
   const confirmarLogout = () => {
     confirmar('Sair', 'Tem certeza que deseja sair da sua conta?', () => logout());
+  };
+
+  const salvarSenha = async () => {
+    if (novaSenha.length < 6) {
+      avisar('Senha curta', 'A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (novaSenha !== confirmaSenha) {
+      avisar('Senhas diferentes', 'As duas senhas digitadas não são iguais.');
+      return;
+    }
+    setSalvandoSenha(true);
+    try {
+      await definirSenha(novaSenha);
+      setNovaSenha('');
+      setConfirmaSenha('');
+      avisar('Senha definida', 'Agora você já pode entrar com seu e-mail e essa senha em outros aparelhos, como no site.');
+    } catch (e) {
+      avisar('Não foi possível salvar', e instanceof Error ? e.message : 'Tente de novo em alguns instantes.');
+    } finally {
+      setSalvandoSenha(false);
+    }
   };
 
   const abrirEdicao = (categoria: CategoriaItem | null) => {
@@ -96,6 +121,37 @@ export function SettingsScreen() {
         </View>
         <Pressable onPress={confirmarLogout}>
           <Text style={styles.linkSair}>Sair</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.secao}>Definir senha</Text>
+      <View style={styles.cartaoSenha}>
+        <Text style={styles.textoAjudaSenha}>
+          Quem entra com Google só consegue usar o app no celular. Defina uma senha aqui pra também poder entrar
+          com seu e-mail em outros lugares, como no site.
+        </Text>
+        <TextInput
+          style={styles.input}
+          value={novaSenha}
+          onChangeText={setNovaSenha}
+          placeholder="Nova senha"
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry
+        />
+        <TextInput
+          style={[styles.input, styles.inputComEspaco]}
+          value={confirmaSenha}
+          onChangeText={setConfirmaSenha}
+          placeholder="Confirmar senha"
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry
+        />
+        <Pressable style={styles.botaoSalvarSenha} onPress={salvarSenha} disabled={salvandoSenha}>
+          {salvandoSenha ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={styles.botaoSalvarSenhaTexto}>Salvar senha</Text>
+          )}
         </Pressable>
       </View>
 
@@ -219,6 +275,29 @@ const styles = StyleSheet.create({
   contaNome: { fontFamily: fonts.bold, fontSize: 14, color: colors.textPrimary },
   contaEmail: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   linkSair: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger },
+  cartaoSenha: {
+    marginHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  textoAjudaSenha: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 10,
+  },
+  inputComEspaco: { marginTop: 8 },
+  botaoSalvarSenha: {
+    marginTop: 12,
+    backgroundColor: colors.urgentHoje,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  botaoSalvarSenhaTexto: { fontFamily: fonts.bold, fontSize: 14, color: colors.white },
   linhaSync: {
     marginHorizontal: 16,
     backgroundColor: colors.surface,

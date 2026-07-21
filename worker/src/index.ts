@@ -408,6 +408,21 @@ async function tratarCategorias(
   return json({ erro: 'Método não suportado' }, 405);
 }
 
+/** Define/troca a senha do usuário logado — dá acesso por e-mail+senha (ex.: no site) pra quem entrou via Google. */
+async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota: string | undefined): Promise<Response> {
+  if (rota === 'senha' && request.method === 'POST') {
+    const { senha } = (await request.json()) as { senha?: string };
+    if (!senha || senha.length < 6) {
+      return json({ erro: 'A senha precisa ter pelo menos 6 caracteres' }, 400);
+    }
+    const senhaHash = await hashSenha(senha);
+    await env.DB.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').bind(senhaHash, usuarioId).run();
+    return json({ ok: true });
+  }
+
+  return json({ erro: 'Rota não encontrada' }, 404);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -430,6 +445,10 @@ export default {
 
       if (partes[0] === 'categorias') {
         return await tratarCategorias(request, env, usuarioId, partes[1], url);
+      }
+
+      if (partes[0] === 'usuario') {
+        return await tratarUsuario(request, env, usuarioId, partes[1]);
       }
 
       if (partes[0] !== 'items') {
