@@ -7,6 +7,7 @@ import { useCategorias } from '../context/CategoriasContext';
 import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
+import { dataHoraLimiteDoItem } from '../utils/periodos';
 import { categoriaInfo, type Item } from '../types/item';
 
 interface Props {
@@ -38,6 +39,7 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   const { categorias } = useCategorias();
   const categoria = categoriaInfo(categorias, item.categoria);
   const dataFormatada = format(parseISO(item.data), 'dd/MM');
+  const atrasado = item.status === 'pendente' && dataHoraLimiteDoItem(item) < new Date();
   const indicadorHorario =
     item.tipoHorario === 'compromisso'
       ? `🕒 ${item.horaCompromisso}`
@@ -51,7 +53,7 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
     <Pressable
       onPress={onPress}
       onLongPress={marcarPrioridade}
-      style={[styles.card, item.prioridade && styles.cardPrioridade]}
+      style={[styles.card, item.prioridade && styles.cardPrioridade, atrasado && styles.cardAtrasado]}
     >
       <CheckboxConcluir concluido={concluido} corPendente={corPendente} onToggle={onToggle} />
       <Animated.View style={[styles.textos, { opacity: opacidadeTexto }]}>
@@ -66,8 +68,11 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           <Text style={styles.categoria}>
             {categoria.icone} {categoria.nome}
           </Text>
-          <Text style={styles.horario}>{dataFormatada}</Text>
-          {indicadorHorario && <Text style={styles.horario}>{indicadorHorario}</Text>}
+          <Text style={[styles.horario, atrasado && styles.horarioAtrasado]}>{dataFormatada}</Text>
+          {indicadorHorario && (
+            <Text style={[styles.horario, atrasado && styles.horarioAtrasado]}>{indicadorHorario}</Text>
+          )}
+          {atrasado && <Text style={styles.avisoAtrasado}>⚠️ Atrasado</Text>}
         </View>
       </Animated.View>
     </Pressable>
@@ -89,6 +94,12 @@ const styles = StyleSheet.create({
   cardPrioridade: {
     borderColor: colors.priority,
     backgroundColor: colors.prioritySoft,
+  },
+  // Aplicado depois de cardPrioridade no array de estilos: um item pode ser
+  // prioritário E estar atrasado ao mesmo tempo — a borda de atraso "ganha"
+  // (fica por cima), mas o fundo de prioridade continua.
+  cardAtrasado: {
+    borderColor: colors.danger,
   },
   textos: {
     flex: 1,
@@ -117,5 +128,13 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  horarioAtrasado: {
+    color: colors.danger,
+  },
+  avisoAtrasado: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.danger,
   },
 });
