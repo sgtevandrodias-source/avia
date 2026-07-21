@@ -79,6 +79,11 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
       await adicionarColunaSeNaoExistir(db, 'items', 'prioridade', 'INTEGER NOT NULL DEFAULT 0');
       // Migração: ordem de exibição das categorias (item 5 do mesmo round).
       await adicionarColunaSeNaoExistir(db, 'categorias', 'ordem', 'INTEGER NOT NULL DEFAULT 999');
+      // Migração: id do item raiz da série recorrente (Fase 1) — itens já
+      // salvos ficam com NULL, ou seja, cada um é tratado como raiz da sua
+      // própria série (comportamento correto pra quem não tinha ocorrências
+      // geradas ainda).
+      await adicionarColunaSeNaoExistir(db, 'items', 'origem_recorrencia_id', 'TEXT');
       return db;
     });
   }
@@ -98,6 +103,7 @@ interface ItemRow {
   recorrencia: Item['recorrencia'];
   lembrete_offset_minutos: number;
   prioridade: number;
+  origem_recorrencia_id: string | null;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -117,6 +123,7 @@ function rowParaItem(row: ItemRow): Item {
     recorrencia: row.recorrencia,
     lembreteOffsetMinutos: row.lembrete_offset_minutos,
     prioridade: row.prioridade === 1,
+    origemRecorrenciaId: row.origem_recorrencia_id,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -137,6 +144,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
   const item: Item = {
     ...novoItem,
     prioridade: novoItem.prioridade ?? false,
+    origemRecorrenciaId: novoItem.origemRecorrenciaId ?? null,
     id: Crypto.randomUUID(),
     status: 'pendente',
     criadoEm: agora,
@@ -146,8 +154,9 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
   await db.runAsync(
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
-      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, criado_em, concluido_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, origem_recorrencia_id,
+      criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       item.id,
       item.textoOriginal,
@@ -161,6 +170,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
       item.recorrencia,
       item.lembreteOffsetMinutos,
       item.prioridade ? 1 : 0,
+      item.origemRecorrenciaId,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,
@@ -235,8 +245,9 @@ export async function upsertItemLocal(item: Item): Promise<void> {
   await db.runAsync(
     `INSERT INTO items (
       id, texto_original, titulo, data, hora_compromisso, hora_limite,
-      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, criado_em, concluido_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, origem_recorrencia_id,
+      criado_em, concluido_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       texto_original = excluded.texto_original,
       titulo = excluded.titulo,
@@ -249,6 +260,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       recorrencia = excluded.recorrencia,
       lembrete_offset_minutos = excluded.lembrete_offset_minutos,
       prioridade = excluded.prioridade,
+      origem_recorrencia_id = excluded.origem_recorrencia_id,
       concluido_em = excluded.concluido_em,
       atualizado_em = excluded.atualizado_em`,
     [
@@ -264,6 +276,7 @@ export async function upsertItemLocal(item: Item): Promise<void> {
       item.recorrencia,
       item.lembreteOffsetMinutos,
       item.prioridade ? 1 : 0,
+      item.origemRecorrenciaId,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,

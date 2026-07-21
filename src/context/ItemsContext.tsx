@@ -1,9 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import * as db from '../db/database';
 import { useCategorias } from './CategoriasContext';
 import { agendarNotificacaoDoItem, cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { sincronizar } from '../sync/sync';
-import { proximaDataRecorrencia, proximaOcorrencia } from '../utils/recorrencia';
+import {
+  existeOcorrenciaNaSerie,
+  gerarOcorrenciasPendentes,
+  proximaDataRecorrencia,
+  proximaOcorrencia,
+  raizDaSerie,
+} from '../utils/recorrencia';
 import type { Item, NovoItem } from '../types/item';
 
 interface ItemsContextValue {
@@ -28,9 +35,20 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const sincronizacaoEmCurso = useRef(false);
   const { recarregar: recarregarCategorias } = useCategorias();
 
+  // Gatilho por tempo (Fase 1): roda a cada carregamento dos itens (abrir o
+  // app, voltar do background, sincronizar) e gera as ocorrências que
+  // faltam pra cada série recorrente cuja data já passou por completo — sem
+  // depender do usuário ter concluído nenhum ciclo. Convive com o gatilho
+  // por conclusão (gerarProximaOcorrenciaSeNecessario) sem duplicar: os dois
+  // conferem se a data já existe na série antes de criar.
   const recarregar = useCallback(async () => {
     const lista = await db.listarItens();
-    setItens(lista);
+    const novasOcorrencias = gerarOcorrenciasPendentes(lista);
+    for (const novoItem of novasOcorrencias) {
+      const criado = await db.criarItem(novoItem);
+      agendarNotificacaoDoItem(criado).catch(() => {});
+    }
+    setItens(novasOcorrencias.length > 0 ? await db.listarItens() : lista);
   }, []);
 
   const sincronizarAgora = useCallback(async () => {
@@ -52,6 +70,18 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       .then(() => sincronizarAgora());
   }, [recarregar, sincronizarAgora]);
 
+  // Além de abrir o app, também roda a checagem de recorrência (via
+  // recarregar) quando o app volta do background — senão um app que fica
+  // muito tempo em segundo plano só re-checaria no próximo cold start.
+  useEffect(() => {
+    const assinatura = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active') {
+        recarregar();
+      }
+    });
+    return () => assinatura.remove();
+  }, [recarregar]);
+
   const adicionarItem = useCallback(
     async (novoItem: NovoItem) => {
       const item = await db.criarItem(novoItem);
@@ -66,15 +96,17 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   // Se o item tem recorrência e acabou de ser concluído, cria a próxima
   // ocorrência (mesmo título/categoria/horário, data avançada a partir da
   // data original — não da data de hoje, pra não acumular atraso quando o
-  // item é concluído fora do dia previsto).
+  // item é concluído fora do dia previsto). Confere antes se essa data já
+  // não foi gerada pelo gatilho por tempo (Fase 1), pra não duplicar quando
+  // os dois gatilhos coincidem no mesmo dia.
   const gerarProximaOcorrenciaSeNecessario = useCallback(
     (item: Item) => {
       const proximaData = proximaDataRecorrencia(item.data, item.recorrencia);
-      if (proximaData) {
-        adicionarItem(proximaOcorrencia(item, proximaData));
-      }
+      if (!proximaData) return;
+      if (existeOcorrenciaNaSerie(itens, raizDaSerie(item), proximaData)) return;
+      adicionarItem(proximaOcorrencia(item, proximaData));
     },
-    [adicionarItem],
+    [itens, adicionarItem],
   );
 
   const editarItem = useCallback(

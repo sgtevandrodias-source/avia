@@ -21,6 +21,7 @@ interface ItemApi {
   recorrencia: string;
   lembreteOffsetMinutos: number;
   prioridade: boolean;
+  origemRecorrenciaId: string | null;
   criadoEm: string;
   concluidoEm: string | null;
   atualizadoEm: string;
@@ -40,6 +41,7 @@ interface ItemRow {
   recorrencia: string;
   lembrete_offset_minutos: number;
   prioridade: number;
+  origem_recorrencia_id: string | null;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -108,6 +110,7 @@ function rowParaApi(row: ItemRow): ItemApi {
     recorrencia: row.recorrencia,
     lembreteOffsetMinutos: row.lembrete_offset_minutos,
     prioridade: row.prioridade === 1,
+    origemRecorrenciaId: row.origem_recorrencia_id,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -204,9 +207,9 @@ async function upsertComLWW(
     .prepare(
       `INSERT INTO items (
         id, texto_original, titulo, data, hora_compromisso, hora_limite,
-        tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade,
+        tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, origem_recorrencia_id,
         criado_em, concluido_em, atualizado_em, excluido, usuario_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         texto_original = excluded.texto_original,
         titulo = excluded.titulo,
@@ -219,6 +222,7 @@ async function upsertComLWW(
         recorrencia = excluded.recorrencia,
         lembrete_offset_minutos = excluded.lembrete_offset_minutos,
         prioridade = excluded.prioridade,
+        origem_recorrencia_id = excluded.origem_recorrencia_id,
         concluido_em = excluded.concluido_em,
         atualizado_em = excluded.atualizado_em,
         excluido = excluded.excluido
@@ -237,6 +241,7 @@ async function upsertComLWW(
       item.recorrencia,
       item.lembreteOffsetMinutos,
       item.prioridade ? 1 : 0,
+      item.origemRecorrenciaId ?? null,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,

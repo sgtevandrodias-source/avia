@@ -31,6 +31,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
   const item: Item = {
     ...novoItem,
     prioridade: novoItem.prioridade ?? false,
+    origemRecorrenciaId: novoItem.origemRecorrenciaId ?? null,
     id: Crypto.randomUUID(),
     status: 'pendente',
     criadoEm: agora,

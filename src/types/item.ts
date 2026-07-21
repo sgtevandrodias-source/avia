@@ -22,14 +22,22 @@ export interface Item {
   status: Status;
   recorrencia: Recorrencia;
   lembreteOffsetMinutos: number; // 0 = no horário do evento; >0 = minutos de antecedência
-  prioridade: boolean; // destaque visual — não afeta a ordenação por horário
+  prioridade: boolean; // itens prioritários vêm antes na ordenação por urgência, além do destaque visual
+  // Id do item RAIZ da série recorrente (o primeiro, criado manualmente) — null
+  // se este item não for uma ocorrência gerada (é ele mesmo a raiz, ou não repete).
+  // Usado pra achar todas as ocorrências já geradas de uma série e evitar duplicar.
+  origemRecorrenciaId: string | null;
   criadoEm: string; // ISO datetime
   concluidoEm: string | null; // ISO datetime
   atualizadoEm: string; // ISO datetime — usado pela sincronização (last write wins)
 }
 
-export type NovoItem = Omit<Item, 'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm' | 'prioridade'> & {
+export type NovoItem = Omit<
+  Item,
+  'id' | 'status' | 'criadoEm' | 'concluidoEm' | 'atualizadoEm' | 'prioridade' | 'origemRecorrenciaId'
+> & {
   prioridade?: boolean;
+  origemRecorrenciaId?: string | null;
 };
 
 export const PRESETS_LEMBRETE: { minutos: number; label: string }[] = [
