@@ -37,8 +37,11 @@ function normalizar(texto: string): string {
 // — nunca corta (ex.: "Pedro Henrique"), mas também não fica pequena à toa
 // quando o nome já é curto (ex.: "Ana" continua grande e destacada). Mede o
 // texto de verdade via onLayout em vez de advinhar pelo comprimento da
-// string — adjustsFontSizeToFit/onTextLayout não são confiáveis no build
-// web, então essa é a única forma que funciona em toda plataforma.
+// string — adjustsFontSizeToFit sozinho não é confiável no build web (não
+// encolhe). Por isso o Text visível também leva adjustsFontSizeToFit como
+// reforço: no nativo (Android/iOS) ele funciona de verdade e cobre o caso do
+// onLayout medir tarde demais ou com um valor que ainda não reflete a fonte
+// final renderizada.
 const SAUDACAO_TAMANHO_MAX = 42;
 const SAUDACAO_TAMANHO_MIN = 18;
 
@@ -117,7 +120,12 @@ export function TopBar({ titulo, saudacao, cor = colors.border }: Props) {
             >
               {textoSaudacao}
             </Text>
-            <Text style={[styles.saudacaoTexto, { fontSize: tamanhoSaudacao }]} numberOfLines={1}>
+            <Text
+              style={[styles.saudacaoTexto, { fontSize: tamanhoSaudacao }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={SAUDACAO_TAMANHO_MIN / SAUDACAO_TAMANHO_MAX}
+            >
               {textoSaudacao}
             </Text>
           </View>

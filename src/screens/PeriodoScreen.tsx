@@ -59,10 +59,13 @@ export function PeriodoScreen({ periodo }: Props) {
           </View>
         }
       />
-      {/* Rodapé discreto — só na Hoje, é a tela de abertura do app. */}
+      {/* Rodapé discreto — só na Hoje, é a tela de abertura do app. zIndex e
+          elevation garantem que fique por cima da lista no Android, que
+          usa a elevação real (e não só a ordem de renderização) pra decidir
+          o que fica em cima. */}
       {periodo === 'hoje' && (
         <View style={styles.rodape} pointerEvents="none">
-          <Text style={styles.rodapeTexto}>desenvolvido por Evandro Dias</Text>
+          <Text style={styles.rodapeTexto}>Desenvolvido por Evandro Dias</Text>
         </View>
       )}
     </SafeAreaView>
@@ -80,10 +83,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    zIndex: 10,
+    elevation: 10,
   },
   rodapeTexto: {
     fontFamily: fonts.regular,
-    fontSize: 10,
+    fontSize: 11,
     color: colors.textMuted,
   },
   lista: {
