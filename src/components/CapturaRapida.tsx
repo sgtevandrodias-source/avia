@@ -75,17 +75,20 @@ export function CapturaRapida() {
       ExpoSpeechRecognitionModule.stop();
       return;
     }
-    const permissao = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!permissao.granted) {
-      avisar('Permissão necessária', 'Ative a permissão de microfone pra usar o ditado por voz.');
-      return;
-    }
-    transcricaoRef.current = '';
-    setTexto('');
     try {
+      const permissao = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!permissao.granted) {
+        avisar('Permissão necessária', 'Ative a permissão de microfone pra usar o ditado por voz.');
+        return;
+      }
+      transcricaoRef.current = '';
+      setTexto('');
       ExpoSpeechRecognitionModule.start({ lang: 'pt-BR', interimResults: true });
     } catch {
-      avisar('Ditado indisponível', 'Não foi possível iniciar o reconhecimento de fala agora.');
+      // Cobre tanto falha ao iniciar quanto navegador sem suporte a ditado
+      // (ex.: requestPermissionsAsync pode nem existir/funcionar em alguns
+      // navegadores no PC) — sem isso, o clique no mic falhava em silêncio.
+      avisar('Ditado indisponível', 'Seu navegador não tem suporte a ditado por voz. Digite normalmente.');
     }
   };
 

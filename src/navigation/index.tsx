@@ -11,6 +11,7 @@ import { AmanhaScreen } from '../screens/AmanhaScreen';
 import { AtrasadosScreen } from '../screens/AtrasadosScreen';
 import { CalendarioScreen } from '../screens/CalendarioScreen';
 import { HistoricoScreen } from '../screens/HistoricoScreen';
+import { CategoriasScreen } from '../screens/CategoriasScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
 import { useItems } from '../context/ItemsContext';
@@ -28,6 +29,7 @@ const CONFIG_TOPBAR: Record<string, { titulo: string; saudacao?: boolean; cor?: 
   Calendario: { titulo: 'Calendário' },
   Atrasados: { titulo: 'Atrasados' },
   Historico: { titulo: 'Feitos' },
+  Categorias: { titulo: 'Categorias' },
   Config: { titulo: 'Configurações' },
 };
 
@@ -43,6 +45,7 @@ const ITENS_MENU: { rota: string; label: string; icone: string }[] = [
   { rota: 'Calendario', label: 'Calendário', icone: '📅' },
   { rota: 'Atrasados', label: 'Atrasados', icone: '⏰' },
   { rota: 'Historico', label: 'Feitos', icone: '✅' },
+  { rota: 'Categorias', label: 'Categorias', icone: '🏷️' },
   { rota: 'Config', label: 'Configurações', icone: '⚙️' },
 ];
 
@@ -123,6 +126,7 @@ function DrawerNavigator() {
         <Drawer.Screen name="Calendario" component={CalendarioScreen} />
         <Drawer.Screen name="Atrasados" component={AtrasadosScreen} />
         <Drawer.Screen name="Historico" component={HistoricoScreen} />
+        <Drawer.Screen name="Categorias" component={CategoriasScreen} />
         <Drawer.Screen name="Config" component={SettingsScreen} />
       </Drawer.Navigator>
     </View>
