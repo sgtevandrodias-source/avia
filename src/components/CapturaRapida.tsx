@@ -177,20 +177,27 @@ export function CapturaRapida() {
         multiline
         textAlignVertical="top"
       />
-      <Pressable onPress={alternarDitado} hitSlop={8}>
-        <Animated.View
-          style={[
-            styles.botaoMic,
-            ouvindo && styles.botaoMicAtivo,
-            { transform: [{ scale: escalaPulso }] },
-          ]}
-        >
-          <Ionicons name="mic" size={22} color={colors.white} />
-        </Animated.View>
-      </Pressable>
-      <Pressable style={styles.botaoAdicionar} onPress={lidarComSubmit}>
-        <Text style={styles.botaoAdicionarTexto}>+</Text>
-      </Pressable>
+      {texto.trim().length === 0 ? (
+        // Campo vazio: só o microfone, pra não poluir a barra com um botão
+        // "+" que ainda não tem o que adicionar.
+        <Pressable onPress={alternarDitado} hitSlop={8}>
+          <Animated.View
+            style={[
+              styles.botaoMic,
+              ouvindo && styles.botaoMicAtivo,
+              { transform: [{ scale: escalaPulso }] },
+            ]}
+          >
+            <Ionicons name="mic" size={22} color={colors.white} />
+          </Animated.View>
+        </Pressable>
+      ) : (
+        // Assim que a pessoa digita algo, o mic dá lugar ao "+" — não faz
+        // sentido ditar por cima de um texto que já está sendo escrito.
+        <Pressable style={styles.botaoAdicionar} onPress={lidarComSubmit}>
+          <Text style={styles.botaoAdicionarTexto}>+</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

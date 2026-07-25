@@ -9,3 +9,12 @@ GOOGLE_CLIENT_ID = "338993673589-m2tkn6u9sgahq0lndqr1q3j3ncnavs4f.apps.googleuse
 binding = "DB"
 database_name = "avia-db"
 database_id = "2d3b7413-c933-47b3-ac7c-ad2eed0252b7"
+
+[[r2_buckets]]
+binding = "ARQUIVO"
+bucket_name = "avia-arquivo"
+
+# Roda todo dia 1 às 03:00 UTC — move itens concluídos com mais de 6 meses
+# do D1 (quente) pro R2 (frio). Ver worker/src/arquivamento.ts.
+[triggers]
+crons = ["0 3 1 * *"]

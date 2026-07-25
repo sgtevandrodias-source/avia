@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../auth/AuthContext';
+import { TopBar } from '../components/TopBar';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
 import { colors } from '../theme/colors';
@@ -111,7 +112,7 @@ export function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <Text style={styles.titulo}>Configurações</Text>
+      <TopBar titulo="Configurações" />
 
       <Text style={styles.secao}>Conta</Text>
       <View style={styles.linhaConta}>

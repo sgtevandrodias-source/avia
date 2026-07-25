@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ItemCard } from '../components/ItemCard';
+import { TopBar } from '../components/TopBar';
 import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -35,9 +36,7 @@ export function HistoricoScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitulo}>Feitos</Text>
-      </View>
+      <TopBar titulo="Feitos" />
       <SectionList
         sections={secoes}
         keyExtractor={(item: Item) => item.id}

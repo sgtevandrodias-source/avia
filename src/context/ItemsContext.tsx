@@ -4,14 +4,13 @@ import * as db from '../db/database';
 import { useCategorias } from './CategoriasContext';
 import { agendarNotificacaoDoItem, cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { sincronizar } from '../sync/sync';
-import {
-  existeOcorrenciaNaSerie,
-  gerarOcorrenciasPendentes,
-  proximaDataRecorrencia,
-  proximaOcorrencia,
-  raizDaSerie,
-} from '../utils/recorrencia';
 import type { Item, NovoItem } from '../types/item';
+
+// Enquanto o app está em primeiro plano, confere o servidor a cada 20s —
+// é o que dá a sensação de sincronização automática entre celular e
+// computador (ver melhoria pedida). Sem infra nova (WebSocket/push): só
+// reaproveita sincronizarAgora(), que já é barata quando não há nada novo.
+const INTERVALO_POLLING_MS = 20_000;
 
 interface ItemsContextValue {
   itens: Item[];
@@ -33,36 +32,31 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const [carregando, setCarregando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const sincronizacaoEmCurso = useRef(false);
+  const recarregarEmCurso = useRef<Promise<void> | null>(null);
   const { recarregar: recarregarCategorias } = useCategorias();
 
-  // Gatilho por tempo (Fase 1): roda a cada carregamento dos itens (abrir o
-  // app, voltar do background, sincronizar) e gera as ocorrências que
-  // faltam pra cada série recorrente cuja data já passou por completo — sem
-  // depender do usuário ter concluído nenhum ciclo. Convive com o gatilho
-  // por conclusão (gerarProximaOcorrenciaSeNecessario) sem duplicar: os dois
-  // conferem se a data já existe na série antes de criar.
+  // Só lê o que já está no SQLite local. Quem decide e cria a próxima
+  // ocorrência de uma série recorrente é o Worker agora
+  // (worker/src/recorrencia.ts), nunca o aparelho — é isso que elimina a
+  // triplicação: antes, cada aparelho gerava a própria ocorrência de forma
+  // independente (e até o mesmo aparelho corria consigo mesmo, disparado por
+  // mount/AppState/pós-sync ao mesmo tempo). Novas ocorrências chegam pelo
+  // sincronizarAgora() normal, que já roda depois de toda ação.
+  //
+  // O mutex abaixo (recarregarEmCurso) protege contra chamadas concorrentes
+  // de recarregar() no MESMO aparelho: se uma já está em andamento, a nova
+  // chamada espera a mesma promessa em vez de disparar uma leitura paralela.
   const recarregar = useCallback(async () => {
-    const lista = await db.listarItens();
-    const { series } = gerarOcorrenciasPendentes(lista);
-    let criouAlgo = false;
-    for (const serie of series) {
-      const idsParaAtualizar = [...serie.idsExistentesParaAtualizar];
-      for (const novoItem of serie.novasOcorrencias) {
-        const criado = await db.criarItem(novoItem);
-        agendarNotificacaoDoItem(criado).catch(() => {});
-        idsParaAtualizar.push(criado.id);
-        criouAlgo = true;
-      }
-      // Bookmark de até onde a série já foi gerada — grava em TODO item da
-      // série (os que já existiam e os recém-criados agora), mesmo que a
-      // ocorrência correspondente venha a ser apagada depois (é isso que
-      // evita ela "voltar" no próximo carregamento, mesmo se a raiz for uma
-      // das apagadas).
-      for (const id of idsParaAtualizar) {
-        await db.marcarRecorrenciaGeradaAte(id, serie.recorrenciaGeradaAte);
-      }
+    if (recarregarEmCurso.current) return recarregarEmCurso.current;
+    const promessa = (async () => {
+      setItens(await db.listarItens());
+    })();
+    recarregarEmCurso.current = promessa;
+    try {
+      await promessa;
+    } finally {
+      recarregarEmCurso.current = null;
     }
-    setItens(criouAlgo ? await db.listarItens() : lista);
   }, []);
 
   const sincronizarAgora = useCallback(async () => {
@@ -84,17 +78,42 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       .then(() => sincronizarAgora());
   }, [recarregar, sincronizarAgora]);
 
-  // Além de abrir o app, também roda a checagem de recorrência (via
-  // recarregar) quando o app volta do background — senão um app que fica
-  // muito tempo em segundo plano só re-checaria no próximo cold start.
+  // Recarrega ao voltar do background — pode ter chegado sincronização de
+  // outro aparelho enquanto o app estava em segundo plano.
   useEffect(() => {
     const assinatura = AppState.addEventListener('change', (estado) => {
       if (estado === 'active') {
         recarregar();
+        sincronizarAgora();
       }
     });
     return () => assinatura.remove();
-  }, [recarregar]);
+  }, [recarregar, sincronizarAgora]);
+
+  // Sincronização "automática" entre aparelhos: enquanto o app está em
+  // primeiro plano, verifica o servidor periodicamente — sem isso, lançar
+  // algo no celular só aparece no computador quando alguma ação disparar
+  // sincronizarAgora() por lá. sincronizarAgora() já tem mutex
+  // (sincronizacaoEmCurso), então um tick que cair em cima de uma
+  // sincronização em andamento só é ignorado, não empilha.
+  useEffect(() => {
+    let intervalo: ReturnType<typeof setInterval> | null = null;
+    const assinatura = AppState.addEventListener('change', (estado) => {
+      if (estado === 'active' && !intervalo) {
+        intervalo = setInterval(() => sincronizarAgora(), INTERVALO_POLLING_MS);
+      } else if (estado !== 'active' && intervalo) {
+        clearInterval(intervalo);
+        intervalo = null;
+      }
+    });
+    if (AppState.currentState === 'active') {
+      intervalo = setInterval(() => sincronizarAgora(), INTERVALO_POLLING_MS);
+    }
+    return () => {
+      assinatura.remove();
+      if (intervalo) clearInterval(intervalo);
+    };
+  }, [sincronizarAgora]);
 
   const adicionarItem = useCallback(
     async (novoItem: NovoItem) => {
@@ -107,44 +126,20 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     [sincronizarAgora],
   );
 
-  // Se o item tem recorrência e acabou de ser concluído, cria a próxima
-  // ocorrência (mesmo título/categoria/horário, data avançada a partir da
-  // data original — não da data de hoje, pra não acumular atraso quando o
-  // item é concluído fora do dia previsto). Confere antes se essa data já
-  // não foi gerada pelo gatilho por tempo (Fase 1), pra não duplicar quando
-  // os dois gatilhos coincidem no mesmo dia. Também avança o bookmark em
-  // todo item sobrevivente da série (mesmo mecanismo do gatilho por tempo),
-  // pra que apagar essa ocorrência depois não a faça "voltar" — mesmo que a
-  // raiz seja uma das que já foram apagadas.
-  const gerarProximaOcorrenciaSeNecessario = useCallback(
-    async (item: Item) => {
-      const proximaData = proximaDataRecorrencia(item.data, item.recorrencia);
-      if (!proximaData) return;
-      const raizId = raizDaSerie(item);
-      if (existeOcorrenciaNaSerie(itens, raizId, proximaData)) return;
-      const novoItem = await adicionarItem(proximaOcorrencia(item, proximaData));
-      const idsDaSerie = itens.filter((i) => raizDaSerie(i) === raizId).map((i) => i.id);
-      for (const id of [...idsDaSerie, novoItem.id]) {
-        db.marcarRecorrenciaGeradaAte(id, proximaData);
-      }
-    },
-    [itens, adicionarItem],
-  );
-
   const editarItem = useCallback(
     async (item: Item) => {
-      const itemAntes = itens.find((i) => i.id === item.id);
       await db.atualizarItem(item);
       setItens((atual) => atual.map((i) => (i.id === item.id ? item : i)));
       await cancelarNotificacoesDoItem(item.id);
       if (item.status === 'pendente') {
         agendarNotificacaoDoItem(item).catch(() => {});
-      } else if (itemAntes?.status === 'pendente' && item.status === 'feito') {
-        gerarProximaOcorrenciaSeNecessario(item);
       }
+      // Se o item for recorrente e tiver acabado de ser concluído, o Worker
+      // é quem decide/cria a próxima ocorrência (worker/src/recorrencia.ts)
+      // — chega no sincronizarAgora() abaixo, não é gerada aqui no aparelho.
       sincronizarAgora();
     },
-    [itens, sincronizarAgora, gerarProximaOcorrenciaSeNecessario],
+    [sincronizarAgora],
   );
 
   const removerItem = useCallback(
@@ -169,13 +164,14 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       );
       if (novoStatus === 'feito') {
         await cancelarNotificacoesDoItem(id);
-        gerarProximaOcorrenciaSeNecessario({ ...item, status: novoStatus, concluidoEm });
       } else {
         agendarNotificacaoDoItem({ ...item, status: novoStatus, concluidoEm }).catch(() => {});
       }
+      // Próxima ocorrência (se recorrente) é responsabilidade do Worker —
+      // ver comentário equivalente em editarItem.
       sincronizarAgora();
     },
-    [itens, sincronizarAgora, gerarProximaOcorrenciaSeNecessario],
+    [itens, sincronizarAgora],
   );
 
   const alternarPrioridade = useCallback(

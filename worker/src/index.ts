@@ -1,8 +1,11 @@
 import { criarJwt, hashSenha, verificarGoogleIdToken, verificarJwt, verificarSenha } from './auth';
 import { semearCategoriasPadrao } from './categoriasPadrao';
+import { gerarOcorrenciasPendentesNoServidor } from './recorrencia';
+import { arquivarItensAntigos } from './arquivamento';
 
 export interface Env {
   DB: D1Database;
+  ARQUIVO: R2Bucket;
   API_KEY: string;
   JWT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
@@ -49,6 +52,7 @@ interface ItemRow {
   atualizado_em: string;
   excluido: number;
   usuario_id: string;
+  serie_chave: string;
 }
 
 interface UsuarioRow {
@@ -194,6 +198,65 @@ async function buscarPorId(db: D1Database, id: string, usuarioId: string): Promi
   return row ?? null;
 }
 
+/**
+ * Mantém series_recorrentes em dia sempre que o item sincronizado é a RAIZ
+ * de uma série (origemRecorrenciaId vazio — ver raizDaSerie no cliente).
+ * Se a raiz tem recorrência, garante/atualiza a série (título, categoria,
+ * horários — o que o usuário editar na raiz passa a valer pras próximas
+ * ocorrências geradas). Se a recorrência foi desligada na raiz, desativa a
+ * série (para de gerar novas ocorrências, sem apagar as que já existem).
+ * Nunca mexe em recorrencia_gerada_ate aqui — esse bookmark é propriedade
+ * exclusiva de gerarOcorrenciasPendentesNoServidor.
+ */
+async function sincronizarSerieDaRaiz(db: D1Database, item: ItemApi, usuarioId: string): Promise<void> {
+  if (item.origemRecorrenciaId) return; // não é raiz de série — nada a fazer
+
+  if (item.recorrencia === 'nenhuma') {
+    await db
+      .prepare('UPDATE series_recorrentes SET ativa = 0, atualizado_em = ? WHERE id = ? AND usuario_id = ?')
+      .bind(new Date().toISOString(), item.id, usuarioId)
+      .run();
+    return;
+  }
+
+  const agora = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO series_recorrentes (
+        id, usuario_id, titulo, texto_original, categoria, tipo_horario, hora_compromisso, hora_limite,
+        recorrencia, lembrete_offset_minutos, prioridade, ativa, recorrencia_gerada_ate, criado_em, atualizado_em
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        titulo = excluded.titulo,
+        texto_original = excluded.texto_original,
+        categoria = excluded.categoria,
+        tipo_horario = excluded.tipo_horario,
+        hora_compromisso = excluded.hora_compromisso,
+        hora_limite = excluded.hora_limite,
+        recorrencia = excluded.recorrencia,
+        lembrete_offset_minutos = excluded.lembrete_offset_minutos,
+        prioridade = excluded.prioridade,
+        ativa = 1,
+        atualizado_em = excluded.atualizado_em`,
+    )
+    .bind(
+      item.id,
+      usuarioId,
+      item.titulo,
+      item.textoOriginal,
+      item.categoria,
+      item.tipoHorario,
+      item.horaCompromisso,
+      item.horaLimite,
+      item.recorrencia,
+      item.lembreteOffsetMinutos,
+      item.prioridade ? 1 : 0,
+      item.criadoEm,
+      agora,
+    )
+    .run();
+}
+
 // Upsert com resolucao "last write wins": só grava se o registro não existir
 // ou se o timestamp `atualizadoEm` recebido for mais recente (ou igual) que o armazenado.
 async function upsertComLWW(
@@ -206,13 +269,15 @@ async function upsertComLWW(
     return { item: rowParaApi(existente), aplicado: false };
   }
 
+  const serieChave = item.origemRecorrenciaId ?? item.id;
+
   await db
     .prepare(
       `INSERT INTO items (
         id, texto_original, titulo, data, hora_compromisso, hora_limite,
         tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, origem_recorrencia_id,
-        recorrencia_gerada_ate, criado_em, concluido_em, atualizado_em, excluido, usuario_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        serie_chave, recorrencia_gerada_ate, criado_em, concluido_em, atualizado_em, excluido, usuario_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         texto_original = excluded.texto_original,
         titulo = excluded.titulo,
@@ -226,6 +291,7 @@ async function upsertComLWW(
         lembrete_offset_minutos = excluded.lembrete_offset_minutos,
         prioridade = excluded.prioridade,
         origem_recorrencia_id = excluded.origem_recorrencia_id,
+        serie_chave = excluded.serie_chave,
         recorrencia_gerada_ate = excluded.recorrencia_gerada_ate,
         concluido_em = excluded.concluido_em,
         atualizado_em = excluded.atualizado_em,
@@ -246,6 +312,7 @@ async function upsertComLWW(
       item.lembreteOffsetMinutos,
       item.prioridade ? 1 : 0,
       item.origemRecorrenciaId ?? null,
+      serieChave,
       item.recorrenciaGeradaAte ?? null,
       item.criadoEm,
       item.concluidoEm,
@@ -255,6 +322,8 @@ async function upsertComLWW(
       usuarioId,
     )
     .run();
+
+  await sincronizarSerieDaRaiz(db, item, usuarioId);
 
   return { item, aplicado: true };
 }
@@ -408,6 +477,48 @@ async function tratarCategorias(
   return json({ erro: 'Método não suportado' }, 405);
 }
 
+interface ArquivoRow {
+  id: string;
+  usuario_id: string;
+  ano: number;
+  r2_key: string;
+  quantidade_itens: number;
+  tamanho_bytes: number;
+  criado_em: string;
+}
+
+/** GET /arquivo (lista anos disponíveis) e GET /arquivo/:ano (baixa o histórico daquele ano do R2). */
+async function tratarArquivo(
+  request: Request,
+  env: Env,
+  usuarioId: string,
+  anoParam: string | undefined,
+): Promise<Response> {
+  if (request.method !== 'GET') return json({ erro: 'Método não suportado' }, 405);
+
+  if (!anoParam) {
+    const { results } = await env.DB.prepare(
+      'SELECT ano, quantidade_itens, tamanho_bytes, criado_em FROM arquivos WHERE usuario_id = ? ORDER BY ano DESC',
+    )
+      .bind(usuarioId)
+      .all();
+    return json(results);
+  }
+
+  const ano = Number(anoParam);
+  const registro = await env.DB.prepare('SELECT * FROM arquivos WHERE usuario_id = ? AND ano = ?')
+    .bind(usuarioId, ano)
+    .first<ArquivoRow>();
+  if (!registro) return json({ erro: 'Nada arquivado nesse ano' }, 404);
+
+  const objeto = await env.ARQUIVO.get(registro.r2_key);
+  if (!objeto) return json({ erro: 'Arquivo não encontrado no armazenamento' }, 404);
+
+  return new Response(objeto.body, {
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+  });
+}
+
 /** Define/troca a senha do usuário logado — dá acesso por e-mail+senha (ex.: no site) pra quem entrou via Google. */
 async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota: string | undefined): Promise<Response> {
   if (rota === 'senha' && request.method === 'POST') {
@@ -424,6 +535,13 @@ async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota
 }
 
 export default {
+  // Cron Trigger mensal (ver [triggers] em wrangler.toml) — move itens
+  // concluídos com mais de 6 meses do D1 pro R2. Independente do fetch()
+  // abaixo; não expõe nada por HTTP.
+  async scheduled(_evento: ScheduledEvent, env: Env): Promise<void> {
+    await arquivarItensAntigos(env.DB, env.ARQUIVO);
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const partes = url.pathname.split('/').filter(Boolean);
@@ -451,6 +569,10 @@ export default {
         return await tratarUsuario(request, env, usuarioId, partes[1]);
       }
 
+      if (partes[0] === 'arquivo') {
+        return await tratarArquivo(request, env, usuarioId, partes[1]);
+      }
+
       if (partes[0] !== 'items') {
         return json({ erro: 'Rota não encontrada' }, 404);
       }
@@ -459,6 +581,11 @@ export default {
 
       // GET /items  ou  GET /items?since=ISO
       if (request.method === 'GET' && !id) {
+        // Fonte única de verdade da recorrência: antes de responder, garante
+        // que toda série ativa já tem a ocorrência de hoje (e quaisquer
+        // atrasadas) geradas no D1. Os aparelhos nunca mais geram ocorrência
+        // por conta própria — só consomem o que está aqui.
+        await gerarOcorrenciasPendentesNoServidor(env.DB, usuarioId);
         const since = url.searchParams.get('since');
         const stmt = since
           ? env.DB.prepare('SELECT * FROM items WHERE usuario_id = ? AND atualizado_em > ? ORDER BY atualizado_em ASC').bind(
@@ -504,6 +631,11 @@ export default {
       if (request.method === 'DELETE' && id) {
         const agora = new Date().toISOString();
         await env.DB.prepare('UPDATE items SET excluido = 1, atualizado_em = ? WHERE id = ? AND usuario_id = ?')
+          .bind(agora, id, usuarioId)
+          .run();
+        // Se o item excluído era raiz de uma série, desativa a série — não
+        // faz sentido continuar gerando ocorrências de uma série sem raiz.
+        await env.DB.prepare('UPDATE series_recorrentes SET ativa = 0, atualizado_em = ? WHERE id = ? AND usuario_id = ?')
           .bind(agora, id, usuarioId)
           .run();
         return json({ ok: true });
