@@ -26,6 +26,7 @@ interface ItemApi {
   prioridade: boolean;
   origemRecorrenciaId: string | null;
   recorrenciaGeradaAte: string | null;
+  notas: string | null;
   criadoEm: string;
   concluidoEm: string | null;
   atualizadoEm: string;
@@ -47,6 +48,7 @@ interface ItemRow {
   prioridade: number;
   origem_recorrencia_id: string | null;
   recorrencia_gerada_ate: string | null;
+  notas: string | null;
   criado_em: string;
   concluido_em: string | null;
   atualizado_em: string;
@@ -118,6 +120,7 @@ function rowParaApi(row: ItemRow): ItemApi {
     prioridade: row.prioridade === 1,
     origemRecorrenciaId: row.origem_recorrencia_id,
     recorrenciaGeradaAte: row.recorrencia_gerada_ate,
+    notas: row.notas,
     criadoEm: row.criado_em,
     concluidoEm: row.concluido_em,
     atualizadoEm: row.atualizado_em,
@@ -276,8 +279,8 @@ async function upsertComLWW(
       `INSERT INTO items (
         id, texto_original, titulo, data, hora_compromisso, hora_limite,
         tipo_horario, categoria, status, recorrencia, lembrete_offset_minutos, prioridade, origem_recorrencia_id,
-        serie_chave, recorrencia_gerada_ate, criado_em, concluido_em, atualizado_em, excluido, usuario_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        serie_chave, recorrencia_gerada_ate, notas, criado_em, concluido_em, atualizado_em, excluido, usuario_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         texto_original = excluded.texto_original,
         titulo = excluded.titulo,
@@ -293,6 +296,7 @@ async function upsertComLWW(
         origem_recorrencia_id = excluded.origem_recorrencia_id,
         serie_chave = excluded.serie_chave,
         recorrencia_gerada_ate = excluded.recorrencia_gerada_ate,
+        notas = excluded.notas,
         concluido_em = excluded.concluido_em,
         atualizado_em = excluded.atualizado_em,
         excluido = excluded.excluido
@@ -314,6 +318,7 @@ async function upsertComLWW(
       item.origemRecorrenciaId ?? null,
       serieChave,
       item.recorrenciaGeradaAte ?? null,
+      item.notas ?? null,
       item.criadoEm,
       item.concluidoEm,
       item.atualizadoEm,

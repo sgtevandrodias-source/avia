@@ -19,6 +19,7 @@ import { SeletorHora } from '../components/SeletorHora';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import {
+  NOTAS_TAMANHO_MAXIMO,
   PRESETS_LEMBRETE,
   type Categoria,
   type Item,
@@ -73,6 +74,7 @@ export function ItemDetailScreen() {
   const [categoria, setCategoria] = useState<Categoria>(base.categoria ?? 'outro');
   const [recorrencia, setRecorrencia] = useState<Recorrencia>(base.recorrencia ?? 'nenhuma');
   const [lembreteOffsetMinutos, setLembreteOffsetMinutos] = useState(base.lembreteOffsetMinutos ?? 0);
+  const [notas, setNotas] = useState(base.notas ?? '');
   const [status, setStatus] = useState(base.status ?? 'pendente');
   const [mostrarCalendario, setMostrarCalendario] = useState(false);
   const [seletorHoraAberto, setSeletorHoraAberto] = useState<'compromisso' | 'prazo' | null>(null);
@@ -97,6 +99,7 @@ export function ItemDetailScreen() {
       categoria,
       recorrencia,
       lembreteOffsetMinutos,
+      notas: notas.trim() ? notas.trim() : null,
     };
 
     if (ehNovo) {
@@ -261,6 +264,23 @@ export function ItemDetailScreen() {
             ))}
           </View>
 
+          <View style={styles.linhaLabelComContador}>
+            <Text style={styles.labelSemMargem}>Notas</Text>
+            <Text style={styles.contador}>
+              {notas.length}/{NOTAS_TAMANHO_MAXIMO}
+            </Text>
+          </View>
+          <TextInput
+            style={[styles.input, styles.inputNotas]}
+            value={notas}
+            onChangeText={setNotas}
+            placeholder="Alguma anotação sobre esse item..."
+            placeholderTextColor={colors.textMuted}
+            maxLength={NOTAS_TAMANHO_MAXIMO}
+            multiline
+            textAlignVertical="top"
+          />
+
           {!ehNovo && (
             <Pressable
               style={[styles.chip, status === 'feito' && styles.chipConcluido, styles.chipStatus]}
@@ -312,6 +332,27 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 15,
     color: colors.textPrimary,
+  },
+  inputNotas: {
+    minHeight: 90,
+    maxHeight: 160,
+  },
+  linhaLabelComContador: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  labelSemMargem: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  contador: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
   },
   linhaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {

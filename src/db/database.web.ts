@@ -33,6 +33,7 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
     prioridade: novoItem.prioridade ?? false,
     origemRecorrenciaId: novoItem.origemRecorrenciaId ?? null,
     recorrenciaGeradaAte: null,
+    notas: novoItem.notas ?? null,
     id: Crypto.randomUUID(),
     status: 'pendente',
     criadoEm: agora,

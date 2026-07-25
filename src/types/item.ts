@@ -32,10 +32,13 @@ export interface Item {
   // Sem isso, apagar a ocorrência mais recente de uma série faz ela "voltar"
   // no próximo carregamento — ver gerarOcorrenciasPendentes em recorrencia.ts.
   recorrenciaGeradaAte: string | null;
+  notas: string | null; // anotação livre do usuário sobre o item, ver NOTAS_TAMANHO_MAXIMO
   criadoEm: string; // ISO datetime
   concluidoEm: string | null; // ISO datetime
   atualizadoEm: string; // ISO datetime — usado pela sincronização (last write wins)
 }
+
+export const NOTAS_TAMANHO_MAXIMO = 300;
 
 export type NovoItem = Omit<
   Item,
@@ -47,9 +50,11 @@ export type NovoItem = Omit<
   | 'prioridade'
   | 'origemRecorrenciaId'
   | 'recorrenciaGeradaAte'
+  | 'notas'
 > & {
   prioridade?: boolean;
   origemRecorrenciaId?: string | null;
+  notas?: string | null;
 };
 
 export const PRESETS_LEMBRETE: { minutos: number; label: string }[] = [
