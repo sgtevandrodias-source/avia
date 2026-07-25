@@ -5,7 +5,6 @@ import { useNavigation } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ItemCard } from '../components/ItemCard';
-import { TopBar } from '../components/TopBar';
 import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -19,8 +18,7 @@ export function AtrasadosScreen() {
   const lista = useMemo(() => itensAtrasados(itens), [itens]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <TopBar titulo="Atrasados" />
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <FlatList
         data={lista}
         keyExtractor={(item: Item) => item.id}

@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import * as SplashScreen from 'expo-splash-screen';
 import { RootNavigator } from './src/navigation';
+import { navigationRef } from './src/navigation/navigationRef';
 import { ItemsProvider } from './src/context/ItemsContext';
 import { CategoriasProvider } from './src/context/CategoriasContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
@@ -20,7 +21,7 @@ function Conteudo() {
   if (carregando) return null;
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       {usuario ? (
         <CategoriasProvider>
           <ItemsProvider>

@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ItemCard } from '../components/ItemCard';
 import { ProgressoDoDia } from '../components/ProgressoDoDia';
-import { TopBar } from '../components/TopBar';
 import { useItems } from '../context/ItemsContext';
 import { colors, corPorPeriodo, type PeriodoKey } from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -22,7 +21,7 @@ interface Props {
   titulo: string;
 }
 
-export function PeriodoScreen({ periodo, titulo }: Props) {
+export function PeriodoScreen({ periodo }: Props) {
   const { itens, alternarStatus } = useItems();
   const navigation = useNavigation<any>();
   const corPendente = corPorPeriodo[periodo];
@@ -40,8 +39,7 @@ export function PeriodoScreen({ periodo, titulo }: Props) {
   const feitosHoje = itensFeitosHoje(itens).length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <TopBar titulo={titulo} saudacao={periodo === 'hoje'} cor={corPendente} />
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       {periodo === 'hoje' && <ProgressoDoDia feitos={feitosHoje} total={totalHoje} />}
       <FlatList
         data={itensPeriodo}

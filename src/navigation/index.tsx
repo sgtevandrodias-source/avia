@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { CapturaRapida } from '../components/CapturaRapida';
+import { TopBar } from '../components/TopBar';
 import { HojeScreen } from '../screens/HojeScreen';
 import { AmanhaScreen } from '../screens/AmanhaScreen';
 import { AtrasadosScreen } from '../screens/AtrasadosScreen';
@@ -16,6 +17,19 @@ import { useItems } from '../context/ItemsContext';
 import { colors, corPorPeriodo, corPorPeriodoSoft } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { itensAtrasados } from '../utils/periodos';
+
+// Configuração do TopBar por rota do Drawer — usada pra renderizar UM único
+// TopBar compartilhado (ver DrawerNavigator abaixo), já que ele agora
+// precisa ficar ACIMA da CapturaRapida em toda tela (melhoria de UI pedida),
+// e não mais dentro de cada tela individualmente.
+const CONFIG_TOPBAR: Record<string, { titulo: string; saudacao?: boolean; cor?: string }> = {
+  Hoje: { titulo: 'Hoje', saudacao: true, cor: corPorPeriodo.hoje },
+  Amanha: { titulo: 'Amanhã', cor: corPorPeriodo.amanha },
+  Calendario: { titulo: 'Calendário' },
+  Atrasados: { titulo: 'Atrasados' },
+  Historico: { titulo: 'Feitos' },
+  Config: { titulo: 'Configurações' },
+};
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -62,17 +76,41 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
 }
 
 function DrawerNavigator() {
+  // Rota ativa do Drawer, pra saber qual título/saudação o TopBar
+  // compartilhado abaixo deve mostrar — ver screenListeners no
+  // Drawer.Navigator. Começa em "Hoje" (rota inicial do drawer).
+  const [rotaAtiva, setRotaAtiva] = useState('Hoje');
+  const configTopo = CONFIG_TOPBAR[rotaAtiva] ?? CONFIG_TOPBAR.Hoje;
+
   return (
     <View style={{ flex: 1 }}>
-      {/* Uma única instância pra tudo — antes cada aba de período (Hoje/Amanhã/
-          15 dias/Mês) montava a própria CapturaRapida, e cada uma reagia à
-          mesma transcrição de voz/texto de forma independente, criando o
-          mesmo item várias vezes. */}
+      {/* TopBar (☰ + título/saudação + busca) e CapturaRapida ficam ACIMA do
+          Drawer.Navigator, uma única instância pra cada, compartilhada por
+          toda tela — nunca dentro de uma tela individual. Pra CapturaRapida
+          isso já era assim (antes cada aba de período montava a própria,
+          cada uma reagindo à mesma transcrição de voz/texto de forma
+          independente e criando o mesmo item várias vezes); o TopBar passou
+          a seguir o mesmo padrão pra poder ficar ordenado ACIMA da
+          CapturaRapida (melhoria de UI pedida), o que não seria possível
+          renderizando-o dentro de cada tela (elas vêm depois da
+          CapturaRapida na árvore). Como o TopBar agora está fora da árvore
+          do Drawer, o botão de menu não usa useNavigation().openDrawer()
+          (não teria acesso ao navegador do Drawer) — usa abrirDrawer(), que
+          alcança o Drawer de fora via o ref do NavigationContainer (ver
+          navigationRef.ts). */}
       <SafeAreaView edges={['top']} style={{ backgroundColor: colors.surface }}>
+        <TopBar titulo={configTopo.titulo} saudacao={configTopo.saudacao} cor={configTopo.cor} />
         <CapturaRapida />
       </SafeAreaView>
       <Drawer.Navigator
         drawerContent={(props) => <ConteudoDrawer {...props} />}
+        screenListeners={{
+          state: (e: any) => {
+            const state = e.data.state;
+            const rota = state?.routes?.[state.index]?.name;
+            if (rota) setRotaAtiva(rota);
+          },
+        }}
         screenOptions={{
           headerShown: false,
           drawerType: 'front',

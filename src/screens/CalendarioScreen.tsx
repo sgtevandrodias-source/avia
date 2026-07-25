@@ -17,7 +17,6 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ItemCard } from '../components/ItemCard';
-import { TopBar } from '../components/TopBar';
 import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -83,9 +82,7 @@ export function CalendarioScreen() {
   const dataSelecionadaObj = parseISO(diaSelecionado);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <TopBar titulo="Calendário" />
-
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.navMes}>
         <Pressable onPress={() => setMesAtual((atual) => subMonths(atual, 1))} style={styles.botaoNavMes}>
           <Text style={styles.setaNavMes}>‹</Text>
