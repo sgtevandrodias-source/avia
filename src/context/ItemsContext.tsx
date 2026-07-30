@@ -2,7 +2,11 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { AppState } from 'react-native';
 import * as db from '../db/database';
 import { useCategorias } from './CategoriasContext';
-import { agendarNotificacaoDoItem, cancelarNotificacoesDoItem } from '../notifications/notifications';
+import {
+  agendarNotificacaoDoItem,
+  cancelarNotificacoesDoItem,
+  reconciliarNotificacoes,
+} from '../notifications/notifications';
 import { sincronizar } from '../sync/sync';
 import type { Item, NovoItem } from '../types/item';
 
@@ -75,7 +79,16 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     recarregar()
       .finally(() => setCarregando(false))
-      .then(() => sincronizarAgora());
+      .then(() => sincronizarAgora())
+      .then(async () => {
+        // Zera e reagenda os lembretes locais uma vez a cada abertura do
+        // app, já com os dados mais atuais (pós-sync) — protege contra
+        // lembrete "fantasma" preso no sistema operacional por qualquer bug
+        // passado (item apagado/duplicado antes da correção) que tenha
+        // deixado notificação órfã agendada num dia anterior.
+        const todos = await db.listarItens();
+        await reconciliarNotificacoes(todos.filter((i) => i.status === 'pendente'));
+      });
   }, [recarregar, sincronizarAgora]);
 
   // Recarrega ao voltar do background — pode ter chegado sincronização de

@@ -1,5 +1,6 @@
 import * as db from '../db/database';
 import { obterTokenAtual } from '../auth/sessionToken';
+import { cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { API_URL } from './config';
 import type { CategoriaItem, Item } from '../types/item';
 
@@ -65,6 +66,11 @@ async function receberAlteracoesRemotas(desde: string | null): Promise<void> {
     if (local && local.atualizadoEm >= remoto.atualizadoEm) continue;
 
     if (remoto.excluido) {
+      // Sem isso, um item apagado em OUTRO aparelho (ou direto no servidor)
+      // nunca cancelava o lembrete já agendado neste aparelho — ele ficava
+      // órfão no sistema operacional e disparava mesmo com o item sumido
+      // da lista (causa dos lembretes repetidos "fantasma").
+      await cancelarNotificacoesDoItem(remoto.id);
       await db.removerItemLocal(remoto.id);
     } else {
       await db.upsertItemLocal(remoto);

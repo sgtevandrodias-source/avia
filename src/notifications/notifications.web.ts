@@ -19,4 +19,6 @@ export async function cancelarNotificacoesDoItem(_itemId: string): Promise<void>
 
 export async function reagendarNotificacaoDoItem(_item: Item): Promise<void> {}
 
+export async function reconciliarNotificacoes(_itensPendentes: Item[]): Promise<void> {}
+
 export function configurarCanalAndroid(): void {}

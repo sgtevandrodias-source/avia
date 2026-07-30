@@ -72,6 +72,18 @@ export async function reagendarNotificacaoDoItem(item: Item): Promise<void> {
   await agendarNotificacaoDoItem(item);
 }
 
+/**
+ * Zera TODO lembrete agendado no aparelho e reagenda do zero, só pros itens
+ * pendentes de verdade. Roda uma vez a cada abertura do app (ver
+ * ItemsContext) — é o que garante que lembrete de item apagado/duplicado por
+ * algum bug antigo nunca fique "fantasma" preso no sistema operacional pra
+ * sempre; a cada abertura o agendado reflete exatamente a lista atual.
+ */
+export async function reconciliarNotificacoes(itensPendentes: Item[]): Promise<void> {
+  await Notifications.cancelAllScheduledNotificationsAsync();
+  await Promise.all(itensPendentes.map((item) => agendarNotificacaoDoItem(item).catch(() => {})));
+}
+
 export function configurarCanalAndroid() {
   if (Platform.OS === 'android') {
     Notifications.setNotificationChannelAsync('default', {
