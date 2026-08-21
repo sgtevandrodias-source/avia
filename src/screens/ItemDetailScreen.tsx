@@ -23,6 +23,7 @@ import {
   NOTAS_TAMANHO_MAXIMO,
   PRESETS_LEMBRETE,
   type Categoria,
+  type CategoriaItem,
   type Item,
   type NovoItem,
   type Recorrencia,
@@ -44,6 +45,27 @@ const RECORRENCIAS: { valor: Recorrencia; label: string }[] = [
   { valor: 'mensal', label: 'Mensal' },
   { valor: 'anual', label: 'Anual' },
 ];
+
+function ChipCategoria({
+  cat,
+  selecionada,
+  onPress,
+}: {
+  cat: CategoriaItem;
+  selecionada: boolean;
+  onPress: (id: string) => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.chip, selecionada && { backgroundColor: cat.cor }]}
+      onPress={() => onPress(cat.id)}
+    >
+      <Text style={[styles.chipTexto, selecionada && styles.chipTextoAtivo]}>
+        {cat.icone} {cat.nome}
+      </Text>
+    </Pressable>
+  );
+}
 
 export function ItemDetailScreen() {
   const navigation = useNavigation<any>();
@@ -239,19 +261,19 @@ export function ItemDetailScreen() {
           />
 
           <Text style={styles.label}>Categoria</Text>
-          <View style={styles.linhaChips}>
-            {categorias.map((cat) => (
-              <Pressable
-                key={cat.id}
-                style={[styles.chip, categoria === cat.id && { backgroundColor: cat.cor }]}
-                onPress={() => setCategoria(cat.id)}
-              >
-                <Text style={[styles.chipTexto, categoria === cat.id && styles.chipTextoAtivo]}>
-                  {cat.icone} {cat.nome}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {categorias.length > 6 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.linhaChipsRolavel}>
+              {categorias.map((cat) => (
+                <ChipCategoria key={cat.id} cat={cat} selecionada={categoria === cat.id} onPress={setCategoria} />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={styles.linhaChips}>
+              {categorias.map((cat) => (
+                <ChipCategoria key={cat.id} cat={cat} selecionada={categoria === cat.id} onPress={setCategoria} />
+              ))}
+            </View>
+          )}
 
           <Text style={styles.label}>Recorrência</Text>
           <View style={styles.linhaChips}>
@@ -392,6 +414,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   linhaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  linhaChipsRolavel: { flexDirection: 'row', gap: 8 },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
