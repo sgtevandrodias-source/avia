@@ -350,8 +350,35 @@ async function upsertComLWW(
     .run();
 
   await sincronizarSerieDaRaiz(db, item, usuarioId);
+  await sincronizarConclusaoCompartilhamentos(db, item.id, usuarioId, item.status === 'feito');
 
   return { item, aplicado: true };
+}
+
+/**
+ * Espelha o status do item original em qualquer compartilhamento ativo dele
+ * — só nessa direção (criador → destinatário, nunca o contrário). Quem
+ * criou o item marca como feito quando RESOLVE o assunto (ex.: "vou na
+ * reunião" ou "mando alguém"); o destinatário só recebeu como aviso, então
+ * ver a tarefa "pendente" no aparelho dele depois que o criador já resolveu
+ * não faz sentido. Se o próprio destinatário já tinha marcado como feito
+ * antes por conta própria (concluido_pelo_destinatario, ver rota
+ * PUT /compartilhamentos/:id/concluir), esse valor independente só é
+ * sobrescrito quando o CRIADOR mexe no item — nunca o inverso.
+ */
+async function sincronizarConclusaoCompartilhamentos(
+  db: D1Database,
+  itemId: string,
+  criadorId: string,
+  concluido: boolean,
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE compartilhamentos SET concluido_pelo_destinatario = ?, atualizado_em = ?
+       WHERE item_id = ? AND criador_id = ? AND excluido = 0`,
+    )
+    .bind(concluido ? 1 : 0, new Date().toISOString(), itemId, criadorId)
+    .run();
 }
 
 async function autenticar(request: Request, env: Env): Promise<string | null> {
