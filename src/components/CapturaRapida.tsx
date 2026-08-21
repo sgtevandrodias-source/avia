@@ -9,6 +9,7 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { parseItem, type ResultadoParse } from '../parser/parseItem';
+import * as db from '../db/database';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
 import { colors } from '../theme/colors';
@@ -16,15 +17,33 @@ import { fonts } from '../theme/typography';
 import { categoriaInfo } from '../types/item';
 import { avisar } from '../utils/confirm';
 
+const CHAVE_DICA_CAPTURA = 'dicaCapturaVista';
+
 export function CapturaRapida() {
   const [texto, setTexto] = useState('');
   const [resultado, setResultado] = useState<ResultadoParse | null>(null);
   const [ouvindo, setOuvindo] = useState(false);
+  const [dicaVisivel, setDicaVisivel] = useState(false);
   const { categorias } = useCategorias();
   const transcricaoRef = useRef('');
   const escalaPulso = useRef(new Animated.Value(1)).current;
   const { adicionarItem } = useItems();
   const navigation = useNavigation<any>();
+
+  // Dica de primeiro uso: só aparece se ninguém nunca interagiu com a
+  // captura rápida antes nesse aparelho — some sozinha assim que o usuário
+  // digitar/ditar algo, ou se ele fechar manualmente, e nunca mais volta
+  // (flag persistida em sync_meta).
+  useEffect(() => {
+    db.getMeta(CHAVE_DICA_CAPTURA).then((valor) => {
+      if (!valor) setDicaVisivel(true);
+    });
+  }, []);
+
+  const dispensarDica = () => {
+    setDicaVisivel(false);
+    db.setMeta(CHAVE_DICA_CAPTURA, '1').catch(() => {});
+  };
 
   useEffect(() => {
     if (!ouvindo) {
@@ -55,6 +74,7 @@ export function CapturaRapida() {
     const transcricao = evento.results[0]?.transcript ?? '';
     transcricaoRef.current = transcricao;
     setTexto(transcricao);
+    if (dicaVisivel && transcricao.trim()) dispensarDica();
   });
 
   useSpeechRecognitionEvent('error', (evento) => {
@@ -157,60 +177,90 @@ export function CapturaRapida() {
   }
 
   return (
-    <View style={styles.wrapper}>
-      <TextInput
-        style={styles.input}
-        placeholder={ouvindo ? 'Ouvindo...' : 'Adicionar algo... ex: reunião amanhã às 15h'}
-        placeholderTextColor={colors.textMuted}
-        value={texto}
-        onChangeText={setTexto}
-        onSubmitEditing={lidarComSubmit}
-        onKeyPress={(e: any) => {
-          // Campo multiline: por padrão o Enter só quebra linha (não dispara
-          // onSubmitEditing). Shift+Enter continua inserindo quebra de linha
-          // de propósito; Enter sozinho confirma, igual antes de virar multiline.
-          if (e.nativeEvent?.key === 'Enter' && !e.nativeEvent?.shiftKey) {
-            e.preventDefault?.();
-            e.nativeEvent?.preventDefault?.();
-            lidarComSubmit();
-          }
-        }}
-        returnKeyType="done"
-        editable={!ouvindo}
-        multiline
-        textAlignVertical="top"
-      />
-      {texto.trim().length === 0 ? (
-        // Campo vazio: só o microfone, pra não poluir a barra com um botão
-        // "+" que ainda não tem o que adicionar.
-        <Pressable
-          onPress={alternarDitado}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={ouvindo ? 'Parar ditado' : 'Ditar por voz'}
-        >
-          <Animated.View
-            style={[
-              styles.botaoMic,
-              ouvindo && styles.botaoMicAtivo,
-              { transform: [{ scale: escalaPulso }] },
-            ]}
-          >
-            <Ionicons name="mic" size={22} color={colors.white} />
-          </Animated.View>
-        </Pressable>
-      ) : (
-        // Assim que a pessoa digita algo, o mic dá lugar ao "+" — não faz
-        // sentido ditar por cima de um texto que já está sendo escrito.
-        <Pressable style={styles.botaoAdicionar} onPress={lidarComSubmit}>
-          <Text style={styles.botaoAdicionarTexto}>+</Text>
-        </Pressable>
+    <View>
+      {dicaVisivel && (
+        <View style={styles.dica}>
+          <Text style={styles.dicaTexto}>
+            💡 Toque no microfone ou digite: &quot;reunião amanhã às 15h&quot;
+          </Text>
+          <Pressable onPress={dispensarDica} hitSlop={8} accessibilityRole="button" accessibilityLabel="Fechar dica">
+            <Ionicons name="close" size={16} color={colors.textMuted} />
+          </Pressable>
+        </View>
       )}
+      <View style={styles.wrapper}>
+        <TextInput
+          style={styles.input}
+          placeholder={ouvindo ? 'Ouvindo...' : 'Adicionar algo... ex: reunião amanhã às 15h'}
+          placeholderTextColor={colors.textMuted}
+          value={texto}
+          onChangeText={(novoTexto) => {
+            setTexto(novoTexto);
+            if (dicaVisivel && novoTexto.trim()) dispensarDica();
+          }}
+          onSubmitEditing={lidarComSubmit}
+          onKeyPress={(e: any) => {
+            // Campo multiline: por padrão o Enter só quebra linha (não dispara
+            // onSubmitEditing). Shift+Enter continua inserindo quebra de linha
+            // de propósito; Enter sozinho confirma, igual antes de virar multiline.
+            if (e.nativeEvent?.key === 'Enter' && !e.nativeEvent?.shiftKey) {
+              e.preventDefault?.();
+              e.nativeEvent?.preventDefault?.();
+              lidarComSubmit();
+            }
+          }}
+          returnKeyType="done"
+          editable={!ouvindo}
+          multiline
+          textAlignVertical="top"
+        />
+        {texto.trim().length === 0 ? (
+          // Campo vazio: só o microfone, pra não poluir a barra com um botão
+          // "+" que ainda não tem o que adicionar.
+          <Pressable
+            onPress={alternarDitado}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={ouvindo ? 'Parar ditado' : 'Ditar por voz'}
+          >
+            <Animated.View
+              style={[
+                styles.botaoMic,
+                ouvindo && styles.botaoMicAtivo,
+                { transform: [{ scale: escalaPulso }] },
+              ]}
+            >
+              <Ionicons name="mic" size={22} color={colors.white} />
+            </Animated.View>
+          </Pressable>
+        ) : (
+          // Assim que a pessoa digita algo, o mic dá lugar ao "+" — não faz
+          // sentido ditar por cima de um texto que já está sendo escrito.
+          <Pressable style={styles.botaoAdicionar} onPress={lidarComSubmit}>
+            <Text style={styles.botaoAdicionarTexto}>+</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  dica: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: colors.background,
+  },
+  dicaTexto: {
+    flex: 1,
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
   wrapper: {
     flexDirection: 'row',
     alignItems: 'flex-end',
