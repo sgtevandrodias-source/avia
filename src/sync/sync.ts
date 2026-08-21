@@ -52,12 +52,13 @@ async function enviarAlteracoesLocais(desde: string | null): Promise<void> {
   }
 }
 
-async function receberAlteracoesRemotas(desde: string | null): Promise<void> {
+/** Retorna o `servidorEm` (relógio do Worker) devolvido pela API pra usar como próximo cursor, ou `null` se a chamada falhou (não avança o cursor nesse caso). */
+async function receberAlteracoesRemotas(desde: string | null): Promise<string | null> {
   const resposta = await fetchComTimeout(
     desde ? `${API_URL}/items?since=${encodeURIComponent(desde)}` : `${API_URL}/items`,
   );
-  if (!resposta.ok) return;
-  const recebidos: ItemRemoto[] = await resposta.json();
+  if (!resposta.ok) return null;
+  const { itens: recebidos, servidorEm }: { itens: ItemRemoto[]; servidorEm: string } = await resposta.json();
   const remotos = recebidos.map((item) => decifrarItemRecebido(item));
   const locais = await db.itensAlteradosDesde(null);
   const mapaLocal = new Map(locais.map((i) => [i.id, i]));
@@ -78,6 +79,7 @@ async function receberAlteracoesRemotas(desde: string | null): Promise<void> {
       await db.upsertItemLocal(remoto);
     }
   }
+  return servidorEm;
 }
 
 async function enviarExclusoesPendentesCategorias(): Promise<void> {
@@ -99,12 +101,14 @@ async function enviarAlteracoesLocaisCategorias(desde: string | null): Promise<v
   }
 }
 
-async function receberAlteracoesRemotasCategorias(desde: string | null): Promise<void> {
+/** Mesmo raciocínio de receberAlteracoesRemotas: cursor vem do relógio do servidor, não do aparelho. */
+async function receberAlteracoesRemotasCategorias(desde: string | null): Promise<string | null> {
   const resposta = await fetchComTimeout(
     desde ? `${API_URL}/categorias?since=${encodeURIComponent(desde)}` : `${API_URL}/categorias`,
   );
-  if (!resposta.ok) return;
-  const remotas: CategoriaRemota[] = await resposta.json();
+  if (!resposta.ok) return null;
+  const { categorias: remotas, servidorEm }: { categorias: CategoriaRemota[]; servidorEm: string } =
+    await resposta.json();
   const locais = await db.categoriasAlteradasDesde(null);
   const mapaLocal = new Map(locais.map((c) => [c.id, c]));
 
@@ -118,6 +122,7 @@ async function receberAlteracoesRemotasCategorias(desde: string | null): Promise
       await db.upsertCategoriaLocal(remota);
     }
   }
+  return servidorEm;
 }
 
 /**
@@ -132,14 +137,21 @@ export async function sincronizar(): Promise<{ ok: boolean }> {
     const desdeCategorias = await db.getMeta(CHAVE_ULTIMA_SYNC_CATEGORIAS);
     await enviarExclusoesPendentesCategorias();
     await enviarAlteracoesLocaisCategorias(desdeCategorias);
-    await receberAlteracoesRemotasCategorias(desdeCategorias);
-    await db.setMeta(CHAVE_ULTIMA_SYNC_CATEGORIAS, new Date().toISOString());
+    const servidorEmCategorias = await receberAlteracoesRemotasCategorias(desdeCategorias);
+    // Só avança o cursor se a chamada realmente teve sucesso (servidorEmCategorias
+    // não-nulo) — e sempre com o relógio do SERVIDOR, nunca do aparelho (ver
+    // comentário em receberAlteracoesRemotasCategorias/no Worker).
+    if (servidorEmCategorias) {
+      await db.setMeta(CHAVE_ULTIMA_SYNC_CATEGORIAS, servidorEmCategorias);
+    }
 
     const desde = await db.getMeta(CHAVE_ULTIMA_SYNC);
     await enviarExclusoesPendentes();
     await enviarAlteracoesLocais(desde);
-    await receberAlteracoesRemotas(desde);
-    await db.setMeta(CHAVE_ULTIMA_SYNC, new Date().toISOString());
+    const servidorEm = await receberAlteracoesRemotas(desde);
+    if (servidorEm) {
+      await db.setMeta(CHAVE_ULTIMA_SYNC, servidorEm);
+    }
     return { ok: true };
   } catch {
     return { ok: false };

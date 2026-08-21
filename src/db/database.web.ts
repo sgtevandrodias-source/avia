@@ -23,7 +23,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export async function listarItens(): Promise<Item[]> {
-  const itens = await request<Item[]>('/items');
+  // GET /items sem "since" devolve { itens, servidorEm } — o "servidorEm" só
+  // importa pro cursor incremental (ver src/sync/sync.ts); aqui só usamos a
+  // lista mesmo, já que o web não guarda cursor local nenhum.
+  const { itens } = await request<{ itens: Item[]; servidorEm: string }>('/items');
   return itens.map((item) => decifrarItemRecebido(item)).sort((a, b) => a.data.localeCompare(b.data));
 }
 
@@ -100,7 +103,8 @@ export async function setMeta(): Promise<void> {}
 // ---- Categorias (Fase 3) ----
 
 export async function listarCategorias(): Promise<CategoriaItem[]> {
-  return request<CategoriaItem[]>('/categorias');
+  const { categorias } = await request<{ categorias: CategoriaItem[]; servidorEm: string }>('/categorias');
+  return categorias;
 }
 
 export async function criarCategoria(nova: NovaCategoria): Promise<CategoriaItem> {

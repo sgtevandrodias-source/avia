@@ -446,6 +446,16 @@ async function tratarCategorias(
 ): Promise<Response> {
   // GET /categorias  ou  GET /categorias?since=ISO
   if (request.method === 'GET' && !id) {
+    // O timestamp do próximo cursor de sincronização PRECISA vir do relógio
+    // do servidor, capturado ANTES da consulta — nunca do relógio do
+    // aparelho que está chamando. Se o cliente usasse o próprio relógio pra
+    // marcar "sincronizei até aqui", qualquer diferença de horário entre o
+    // aparelho e o Worker (mesmo poucos segundos) faz alterações feitas
+    // pelo servidor (ex.: exclusão, geração de recorrência) ficarem com um
+    // atualizado_em "anterior" ao cursor do cliente e nunca mais aparecerem
+    // pra ele — foi exatamente essa a causa da sincronização silenciosamente
+    // não propagar exclusões entre aparelhos.
+    const servidorEm = new Date().toISOString();
     const since = url.searchParams.get('since');
     const stmt = since
       ? env.DB.prepare('SELECT * FROM categorias WHERE usuario_id = ? AND atualizado_em > ? ORDER BY atualizado_em ASC').bind(
@@ -456,7 +466,7 @@ async function tratarCategorias(
           'SELECT * FROM categorias WHERE usuario_id = ? AND excluido = 0 ORDER BY ordem ASC, criado_em ASC',
         ).bind(usuarioId);
     const { results } = await stmt.all<CategoriaRow>();
-    return json(results.map(categoriaRowParaApi));
+    return json({ categorias: results.map(categoriaRowParaApi), servidorEm });
   }
 
   // GET /categorias/:id
@@ -655,6 +665,12 @@ export default {
         // atrasadas) geradas no D1. Os aparelhos nunca mais geram ocorrência
         // por conta própria — só consomem o que está aqui.
         await gerarOcorrenciasPendentesNoServidor(env.DB, usuarioId);
+        // Ver comentário equivalente em tratarCategorias: o cursor da próxima
+        // sincronização tem que ser o relógio do SERVIDOR, não o do aparelho
+        // — senão exclusões e ocorrências geradas aqui podem ficar com um
+        // atualizado_em "anterior" ao cursor que o cliente guardou e nunca
+        // mais chegar até ele.
+        const servidorEm = new Date().toISOString();
         const since = url.searchParams.get('since');
         const stmt = since
           ? env.DB.prepare('SELECT * FROM items WHERE usuario_id = ? AND atualizado_em > ? ORDER BY atualizado_em ASC').bind(
@@ -665,7 +681,7 @@ export default {
               usuarioId,
             );
         const { results } = await stmt.all<ItemRow>();
-        return json(results.map(rowParaApi));
+        return json({ itens: results.map(rowParaApi), servidorEm });
       }
 
       // GET /items/:id

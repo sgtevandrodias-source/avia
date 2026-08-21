@@ -16,7 +16,7 @@ type Passo = 'senha' | 'recuperacao' | 'concluido';
 export function ConfigurarCriptografiaScreen() {
   const navigation = useNavigation<any>();
   const { configurarCriptografia } = useAuth();
-  const { itens, sincronizarAgora } = useItems();
+  const { sincronizarAgora } = useItems();
 
   const [passo, setPasso] = useState<Passo>('senha');
   const [fraseSenha, setFraseSenha] = useState('');
@@ -51,13 +51,22 @@ export function ConfigurarCriptografiaScreen() {
     setPasso('concluido');
     setMigrando(true);
     try {
+      // Sincroniza ANTES de tocar em qualquer coisa: precisa ter certeza que
+      // o que está local reflete o que o servidor tem de mais atual (algo
+      // pode ter sido excluído/editado em outro aparelho e ainda não ter
+      // chegado aqui). Sem esse passo, "tocar" e reenviar um item que na
+      // verdade já foi excluído em outro lugar recriaria esse item — LWW só
+      // protege contra dado antigo se o dado local já estiver em dia.
+      await sincronizarAgora();
+
       // Recifra e reenvia o que já existia em texto puro antes desta
       // configuração — a partir de agora os hooks em sync.ts/database.web.ts
       // já cifram tudo automaticamente, mas o que já estava sincronizado
       // precisa desse empurrão pra ser reenviado cifrado (ver
       // db.tocarTodosItens em src/db/database.ts).
       if (Platform.OS === 'web') {
-        for (const item of itens) {
+        const itensAtuais = await db.listarItens();
+        for (const item of itensAtuais) {
           await db.atualizarItem(item);
         }
       } else {

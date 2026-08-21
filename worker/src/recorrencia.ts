@@ -86,12 +86,19 @@ export async function gerarOcorrenciasPendentesNoServidor(db: D1Database, usuari
     let dataAtual = serie.recorrencia_gerada_ate;
     if (!dataAtual) {
       // Sem bookmark ainda (série recém-migrada ou recém-criada): parte da
-      // maior data já existente entre as ocorrências dessa série.
+      // maior data já existente entre as ocorrências dessa série. Se não
+      // existir NENHUMA ocorrência não-excluída (ex.: o usuário apagou todas
+      // as ocorrências uma a uma, sem apagar a raiz/série em si), NUNCA cai
+      // pra data de criação da série — isso já regenerou meses de tarefas
+      // "deletadas" de uma vez no passado. Sem histórico confiável pra
+      // retomar, o seguro é só começar a gerar a partir de agora.
       const maior = await db
         .prepare('SELECT MAX(data) as maior FROM items WHERE usuario_id = ? AND serie_chave = ? AND excluido = 0')
         .bind(usuarioId, serie.id)
         .first<{ maior: string | null }>();
-      dataAtual = maior?.maior ?? serie.criado_em.slice(0, 10);
+      const ontem = new Date();
+      ontem.setUTCDate(ontem.getUTCDate() - 1);
+      dataAtual = maior?.maior ?? paraString(ontem);
     }
 
     let geracoes = 0;
