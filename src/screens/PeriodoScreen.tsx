@@ -5,6 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import { ItemCard } from '../components/ItemCard';
 import { ProgressoDoDia } from '../components/ProgressoDoDia';
 import { useItems } from '../context/ItemsContext';
+import { useCompartilhamentos } from '../context/CompartilhamentosContext';
+import { itemDeCompartilhamento } from '../utils/compartilhamentos';
 import { colors, corPorPeriodo, type PeriodoKey } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import {
@@ -23,20 +25,29 @@ interface Props {
 
 export function PeriodoScreen({ periodo }: Props) {
   const { itens, alternarStatus } = useItems();
+  const { recebidos } = useCompartilhamentos();
   const navigation = useNavigation<any>();
   const corPendente = corPorPeriodo[periodo];
+
+  // Itens compartilhados com a gente e já aceitos entram nas mesmas listas
+  // de período, lado a lado com os próprios — convertidos pra forma de Item
+  // (somenteLeitura: true, ver utils/compartilhamentos.ts).
+  const todosOsItens = useMemo(() => {
+    const aceitos = recebidos.filter((c) => c.status === 'aceito').map(itemDeCompartilhamento);
+    return [...itens, ...aceitos];
+  }, [itens, recebidos]);
 
   // Pendentes (ordenados por prioridade + urgência) seguidos dos concluídos
   // daquele período — concluídos não somem da lista principal, só ficam por
   // último (o ItemCard já aplica o risco no título).
   const itensPeriodo = useMemo(() => {
-    const pendentes = ordenarPorUrgencia(itensDoPeriodo(itens, periodo));
-    const concluidos = ordenarPorUrgencia(itensConcluidosDoPeriodo(itens, periodo));
+    const pendentes = ordenarPorUrgencia(itensDoPeriodo(todosOsItens, periodo));
+    const concluidos = ordenarPorUrgencia(itensConcluidosDoPeriodo(todosOsItens, periodo));
     return [...pendentes, ...concluidos];
-  }, [itens, periodo]);
+  }, [todosOsItens, periodo]);
 
-  const totalHoje = itensPendentesHoje(itens).length + itensFeitosHoje(itens).length;
-  const feitosHoje = itensFeitosHoje(itens).length;
+  const totalHoje = itensPendentesHoje(todosOsItens).length + itensFeitosHoje(todosOsItens).length;
+  const feitosHoje = itensFeitosHoje(todosOsItens).length;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -50,7 +61,11 @@ export function PeriodoScreen({ periodo }: Props) {
             item={item}
             corPendente={corPendente}
             onToggle={() => alternarStatus(item.id)}
-            onPress={() => navigation.navigate('DetalheItem', { itemId: item.id })}
+            onPress={() =>
+              item.somenteLeitura
+                ? navigation.navigate('DetalheItem', { itemCompartilhado: item })
+                : navigation.navigate('DetalheItem', { itemId: item.id })
+            }
           />
         )}
         ListEmptyComponent={

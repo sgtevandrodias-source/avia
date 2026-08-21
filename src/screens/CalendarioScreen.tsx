@@ -18,6 +18,8 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { ItemCard } from '../components/ItemCard';
 import { useItems } from '../context/ItemsContext';
+import { useCompartilhamentos } from '../context/CompartilhamentosContext';
+import { itemDeCompartilhamento } from '../utils/compartilhamentos';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { hojeISO } from '../utils/periodos';
@@ -33,19 +35,27 @@ interface Celula {
 
 export function CalendarioScreen() {
   const { itens, alternarStatus } = useItems();
+  const { recebidos } = useCompartilhamentos();
   const navigation = useNavigation<any>();
   const [mesAtual, setMesAtual] = useState(() => startOfMonth(new Date()));
   const [diaSelecionado, setDiaSelecionado] = useState(hojeISO());
 
+  // Itens compartilhados com a gente e já aceitos entram no calendário junto
+  // com os próprios (somenteLeitura: true, ver utils/compartilhamentos.ts).
+  const todosOsItens = useMemo(() => {
+    const aceitos = recebidos.filter((c) => c.status === 'aceito').map(itemDeCompartilhamento);
+    return [...itens, ...aceitos];
+  }, [itens, recebidos]);
+
   const itensPorDia = useMemo(() => {
     const mapa = new Map<string, Item[]>();
-    for (const item of itens) {
+    for (const item of todosOsItens) {
       const lista = mapa.get(item.data) ?? [];
       lista.push(item);
       mapa.set(item.data, lista);
     }
     return mapa;
-  }, [itens]);
+  }, [todosOsItens]);
 
   const celulas = useMemo<Celula[]>(() => {
     const inicioMes = startOfMonth(mesAtual);
@@ -155,7 +165,11 @@ export function CalendarioScreen() {
             item={item}
             corPendente={colors.urgentHoje}
             onToggle={() => alternarStatus(item.id)}
-            onPress={() => navigation.navigate('DetalheItem', { itemId: item.id })}
+            onPress={() =>
+              item.somenteLeitura
+                ? navigation.navigate('DetalheItem', { itemCompartilhado: item })
+                : navigation.navigate('DetalheItem', { itemId: item.id })
+            }
           />
         )}
         ListEmptyComponent={

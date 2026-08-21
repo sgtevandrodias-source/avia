@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { CheckboxConcluir } from './CheckboxConcluir';
 import { useCategorias } from '../context/CategoriasContext';
 import { useItems } from '../context/ItemsContext';
+import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { campoOuBloqueado } from '../crypto/itemCriptografia';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -22,14 +23,36 @@ interface Props {
 
 export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   const { alternarPrioridade, removerItem } = useItems();
+  const { alternarConclusaoCompartilhado, removerCompartilhamento } = useCompartilhamentos();
   const titulo = campoOuBloqueado(item.titulo) ?? item.titulo;
+  // Item vindo de um compartilhamento aceito (ver utils/compartilhamentos.ts)
+  // — só quem criou o item de verdade pode editar/excluir/priorizar; aqui só
+  // dá pra marcar como feito (do seu lado) ou remover da própria agenda.
+  const somenteLeitura = item.somenteLeitura === true;
 
   const marcarPrioridade = () => {
+    if (somenteLeitura) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     alternarPrioridade(item.id);
   };
 
+  const alternarConcluido = () => {
+    if (somenteLeitura) {
+      alternarConclusaoCompartilhado(item.compartilhamentoId!);
+    } else {
+      onToggle();
+    }
+  };
+
   const excluir = () => {
+    if (somenteLeitura) {
+      confirmar(
+        'Remover da minha agenda',
+        `Isso não afeta o compromisso de ${item.compartilhadoPorNome}. Remover mesmo assim?`,
+        () => removerCompartilhamento(item.compartilhamentoId!),
+      );
+      return;
+    }
     confirmar('Excluir item', `Tem certeza que deseja excluir "${titulo}"?`, () => {
       removerItem(item.id);
     });
@@ -47,7 +70,16 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   }, [concluido]);
 
   const { categorias } = useCategorias();
-  const categoria = categoriaInfo(categorias, item.categoria);
+  // Item compartilhado nunca tem uma categoria de verdade em
+  // CategoriasContext (quem criou pode nem ter essa categoria cadastrada) —
+  // usa o nome/ícone/cor do próprio snapshot em vez de categoriaInfo.
+  const categoria = somenteLeitura
+    ? {
+        icone: item.categoriaIconeCompartilhado ?? '🔗',
+        nome: item.categoriaNomeCompartilhado ?? '',
+        cor: item.categoriaCorCompartilhado ?? colors.border,
+      }
+    : categoriaInfo(categorias, item.categoria);
   const dataFormatada = format(parseISO(item.data), 'dd/MM');
   const atrasado = item.status === 'pendente' && dataHoraLimiteDoItem(item) < new Date();
   const indicadorHorario =
@@ -62,10 +94,10 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   return (
     <Pressable
       onPress={onPress}
-      onLongPress={marcarPrioridade}
+      onLongPress={somenteLeitura ? undefined : marcarPrioridade}
       style={[styles.card, item.prioridade && styles.cardPrioridade, atrasado && styles.cardAtrasado]}
     >
-      <CheckboxConcluir concluido={concluido} corPendente={corPendente} onToggle={onToggle} />
+      <CheckboxConcluir concluido={concluido} corPendente={corPendente} onToggle={alternarConcluido} />
       <Animated.View style={[styles.textos, { opacity: opacidadeTexto }]}>
         <Text
           style={[styles.titulo, concluido && styles.tituloConcluido]}
@@ -83,6 +115,7 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
             <Text style={[styles.horario, atrasado && styles.horarioAtrasado]}>{indicadorHorario}</Text>
           )}
           {atrasado && <Text style={styles.avisoAtrasado}>⚠️ Atrasado</Text>}
+          {somenteLeitura && <Text style={styles.seloCompartilhado}>👥 de {item.compartilhadoPorNome}</Text>}
         </View>
       </Animated.View>
       <Pressable
@@ -90,9 +123,9 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
         hitSlop={8}
         style={styles.botaoExcluir}
         accessibilityRole="button"
-        accessibilityLabel="Excluir item"
+        accessibilityLabel={somenteLeitura ? 'Remover da minha agenda' : 'Excluir item'}
       >
-        <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
+        <Ionicons name={somenteLeitura ? 'exit-outline' : 'trash-outline'} size={20} color={colors.textMuted} />
       </Pressable>
     </Pressable>
   );
@@ -159,5 +192,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontSize: 12,
     color: colors.danger,
+  },
+  seloCompartilhado: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.textMuted,
   },
 });

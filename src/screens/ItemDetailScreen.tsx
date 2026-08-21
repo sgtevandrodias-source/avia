@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,8 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { format, parse } from 'date-fns';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
+import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { campoOuBloqueado, tituloOuNotasBloqueados } from '../crypto/itemCriptografia';
 import { SeletorHora } from '../components/SeletorHora';
 import { colors } from '../theme/colors';
@@ -46,6 +50,10 @@ const RECORRENCIAS: { valor: Recorrencia; label: string }[] = [
   { valor: 'anual', label: 'Anual' },
 ];
 
+// Aviso de "compartilhar tira o item da criptografia ponta-a-ponta" — uma
+// vez só por sessão do app (não precisa persistir em disco, ver Fase 9.1).
+let avisoCriptografiaCompartilhamentoMostrado = false;
+
 function ChipCategoria({
   cat,
   selecionada,
@@ -67,17 +75,112 @@ function ChipCategoria({
   );
 }
 
+/**
+ * Item vindo de um compartilhamento aceito (ver utils/compartilhamentos.ts)
+ * não vem de useItems() — a tela de origem (ItemCard/PeriodoScreen/
+ * CalendarioScreen) manda o Item inteiro via route.params porque não tem
+ * como essa tela buscar por id. Só quem criou o item de verdade edita; aqui
+ * só dá pra ver os campos e remover da própria agenda.
+ */
+function ItemCompartilhadoDetalhe({ item }: { item: Item }) {
+  const navigation = useNavigation<any>();
+  const { removerCompartilhamento } = useCompartilhamentos();
+
+  const dataFormatada = format(parse(item.data, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy');
+  const horario =
+    item.tipoHorario === 'compromisso'
+      ? item.horaCompromisso
+      : item.tipoHorario === 'prazo'
+        ? item.horaLimite
+        : item.tipoHorario === 'dia_todo'
+          ? 'Dia todo'
+          : null;
+
+  const remover = () => {
+    confirmar(
+      'Remover da minha agenda',
+      `Isso não afeta o compromisso de ${item.compartilhadoPorNome}. Remover mesmo assim?`,
+      async () => {
+        await removerCompartilhamento(item.compartilhamentoId!);
+        navigation.goBack();
+      },
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Text style={styles.avisoCompartilhado}>
+          👥 Compartilhado por {item.compartilhadoPorNome} — só quem criou pode editar.
+        </Text>
+
+        <Text style={styles.label}>Título</Text>
+        <Text style={styles.textoSomenteLeitura}>{item.titulo}</Text>
+
+        <Text style={styles.label}>Data</Text>
+        <Text style={styles.textoSomenteLeitura}>{dataFormatada}</Text>
+
+        {horario && (
+          <>
+            <Text style={styles.label}>Horário</Text>
+            <Text style={styles.textoSomenteLeitura}>{horario}</Text>
+          </>
+        )}
+
+        <Text style={styles.label}>Categoria</Text>
+        <Text style={styles.textoSomenteLeitura}>
+          {item.categoriaIconeCompartilhado} {item.categoriaNomeCompartilhado}
+        </Text>
+
+        {item.notas && (
+          <>
+            <Text style={styles.label}>Notas</Text>
+            <Text style={styles.textoSomenteLeitura}>{item.notas}</Text>
+          </>
+        )}
+
+        <Pressable style={styles.botaoExcluir} onPress={remover}>
+          <Text style={styles.botaoExcluirTexto}>Remover da minha agenda</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// Despachante puro (sem hooks próprios) — decide qual variante renderizar
+// sem violar a regra dos hooks: um item compartilhado e um item normal são
+// componentes DIFERENTES, cada um com seus próprios hooks, então trocar de
+// um pro outro é só um mount/unmount comum do React, nunca uma chamada de
+// hook pulada dentro do mesmo componente.
 export function ItemDetailScreen() {
+  const route = useRoute<any>();
+  const itemCompartilhado: Item | undefined = route.params?.itemCompartilhado;
+  if (itemCompartilhado) {
+    return <ItemCompartilhadoDetalhe item={itemCompartilhado} />;
+  }
+  return <ItemFormularioDetalhe />;
+}
+
+function ItemFormularioDetalhe() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { itens, adicionarItem, editarItem, removerItem } = useItems();
   const { categorias } = useCategorias();
+  const { enviados, compartilharItem } = useCompartilhamentos();
+  const { criptografiaConfigurada } = useAuth();
 
   const itemExistente: Item | undefined = route.params?.itemId
     ? itens.find((i) => i.id === route.params.itemId)
     : undefined;
   const rascunho: NovoItem | undefined = route.params?.rascunho;
   const ehNovo = !itemExistente;
+
+  const compartilhamentoDoItem = itemExistente
+    ? enviados.find((c) => c.itemId === itemExistente.id)
+    : undefined;
+  const [modalCompartilharVisivel, setModalCompartilharVisivel] = useState(false);
+  const [emailCompartilhar, setEmailCompartilhar] = useState('');
+  const [compartilhando, setCompartilhando] = useState(false);
 
   const base = itemExistente ?? {
     ...rascunho,
@@ -156,6 +259,37 @@ export function ItemDetailScreen() {
       await removerItem(itemExistente.id);
       navigation.goBack();
     });
+  };
+
+  const abrirModalCompartilhar = () => {
+    if (criptografiaConfigurada && !avisoCriptografiaCompartilhamentoMostrado) {
+      confirmar(
+        'Compartilhar item protegido',
+        'Este item está protegido por criptografia. Ao compartilhar, o título e as notas deixam de ser ponta-a-ponta: tanto a pessoa quanto o servidor do Avia poderão lê-los. Continuar?',
+        () => {
+          avisoCriptografiaCompartilhamentoMostrado = true;
+          setEmailCompartilhar('');
+          setModalCompartilharVisivel(true);
+        },
+      );
+      return;
+    }
+    setEmailCompartilhar('');
+    setModalCompartilharVisivel(true);
+  };
+
+  const enviarCompartilhamento = async () => {
+    if (!itemExistente || !emailCompartilhar.trim()) return;
+    setCompartilhando(true);
+    try {
+      await compartilharItem(itemExistente, emailCompartilhar.trim());
+      setModalCompartilharVisivel(false);
+      avisar('Convite enviado', `A pessoa vai ver o convite assim que aceitar.`);
+    } catch (e) {
+      avisar('Não foi possível compartilhar', e instanceof Error ? e.message : 'Tente de novo em alguns instantes.');
+    } finally {
+      setCompartilhando(false);
+    }
   };
 
   return (
@@ -350,12 +484,68 @@ export function ItemDetailScreen() {
           </Pressable>
 
           {!ehNovo && (
+            <Pressable style={styles.botaoCompartilhar} onPress={abrirModalCompartilhar}>
+              <Text style={styles.botaoCompartilharTexto}>
+                {compartilhamentoDoItem ? 'Atualizar compartilhamento' : '🔗 Compartilhar'}
+              </Text>
+            </Pressable>
+          )}
+
+          {!ehNovo && (
             <Pressable style={styles.botaoExcluir} onPress={excluir}>
               <Text style={styles.botaoExcluirTexto}>Excluir item</Text>
             </Pressable>
           )}
         </ScrollView>
       </SafeAreaView>
+
+      <Modal
+        visible={modalCompartilharVisivel}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalCompartilharVisivel(false)}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitulo}>
+              {compartilhamentoDoItem ? 'Atualizar compartilhamento' : 'Compartilhar item'}
+            </Text>
+            {compartilhamentoDoItem && (
+              <Text style={styles.modalTexto}>
+                Já compartilhado com {compartilhamentoDoItem.destinatarioNome} ({compartilhamentoDoItem.status}) —
+                digite o e-mail de novo pra atualizar com os dados atuais.
+              </Text>
+            )}
+            <TextInput
+              style={styles.input}
+              value={emailCompartilhar}
+              onChangeText={setEmailCompartilhar}
+              placeholder="E-mail da pessoa"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <Pressable
+              style={styles.botaoSalvar}
+              onPress={enviarCompartilhamento}
+              disabled={compartilhando || !emailCompartilhar.trim()}
+            >
+              {compartilhando ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.botaoSalvarTexto}>Enviar convite</Text>
+              )}
+            </Pressable>
+            <Pressable
+              style={styles.botaoCancelarModal}
+              onPress={() => setModalCompartilharVisivel(false)}
+              disabled={compartilhando}
+            >
+              <Text style={styles.botaoCancelarModalTexto}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -413,6 +603,27 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 6,
   },
+  avisoCompartilhado: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: colors.textSecondary,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  textoSomenteLeitura: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   linhaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   linhaChipsRolavel: { flexDirection: 'row', gap: 8 },
   chip: {
@@ -439,4 +650,40 @@ const styles = StyleSheet.create({
   botaoSalvarTexto: { fontFamily: fonts.bold, fontSize: 15, color: colors.white },
   botaoExcluir: { marginTop: 14, alignItems: 'center', paddingVertical: 10 },
   botaoExcluirTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger },
+  botaoCompartilhar: {
+    marginTop: 14,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  botaoCompartilharTexto: { fontFamily: fonts.bold, fontSize: 14, color: colors.textPrimary },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modal: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitulo: {
+    fontFamily: fonts.extraBold,
+    fontSize: 17,
+    color: colors.textPrimary,
+    marginBottom: 10,
+  },
+  modalTexto: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  botaoCancelarModal: { marginTop: 10, alignItems: 'center', paddingVertical: 8 },
+  botaoCancelarModalTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
 });

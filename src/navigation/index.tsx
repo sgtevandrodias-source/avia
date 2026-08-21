@@ -12,12 +12,14 @@ import { AtrasadosScreen } from '../screens/AtrasadosScreen';
 import { CalendarioScreen } from '../screens/CalendarioScreen';
 import { HistoricoScreen } from '../screens/HistoricoScreen';
 import { CategoriasScreen } from '../screens/CategoriasScreen';
+import { CompartilhadosScreen } from '../screens/CompartilhadosScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
 import { ConfigurarCriptografiaScreen } from '../screens/ConfigurarCriptografiaScreen';
 import { DesbloquearCriptografiaScreen } from '../screens/DesbloquearCriptografiaScreen';
 import { CriptografiaAvisos } from '../components/CriptografiaAvisos';
 import { useItems } from '../context/ItemsContext';
+import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { colors, corPorPeriodo, corPorPeriodoSoft } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { itensAtrasados } from '../utils/periodos';
@@ -33,6 +35,7 @@ const CONFIG_TOPBAR: Record<string, { titulo: string; saudacao?: boolean; cor?: 
   Atrasados: { titulo: 'Atrasados' },
   Historico: { titulo: 'Feitos' },
   Categorias: { titulo: 'Categorias' },
+  Compartilhados: { titulo: 'Compartilhados' },
   Config: { titulo: 'Configurações' },
 };
 
@@ -49,18 +52,30 @@ const ITENS_MENU: { rota: string; label: string; icone: string }[] = [
   { rota: 'Atrasados', label: 'Atrasados', icone: '⏰' },
   { rota: 'Historico', label: 'Feitos', icone: '✅' },
   { rota: 'Categorias', label: 'Categorias', icone: '🏷️' },
+  { rota: 'Compartilhados', label: 'Compartilhados', icone: '👥' },
   { rota: 'Config', label: 'Configurações', icone: '⚙️' },
 ];
 
 function ConteudoDrawer(props: DrawerContentComponentProps) {
   const { itens } = useItems();
+  const { recebidos } = useCompartilhamentos();
   const quantidadeAtrasados = useMemo(() => itensAtrasados(itens).length, [itens]);
+  const quantidadeConvitesPendentes = useMemo(
+    () => recebidos.filter((c) => c.status === 'pendente').length,
+    [recebidos],
+  );
   const rotaAtiva = props.state.routeNames[props.state.index];
 
   return (
     <DrawerContentScrollView {...props} style={styles.drawer} contentContainerStyle={styles.drawerConteudo}>
       {ITENS_MENU.map((item) => {
         const ativo = item.rota === rotaAtiva;
+        const quantidadeBadge =
+          item.rota === 'Atrasados'
+            ? quantidadeAtrasados
+            : item.rota === 'Compartilhados'
+              ? quantidadeConvitesPendentes
+              : 0;
         return (
           <Pressable
             key={item.rota}
@@ -69,9 +84,9 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
           >
             <Text style={styles.itemIcone}>{item.icone}</Text>
             <Text style={[styles.itemLabel, ativo && styles.itemLabelAtivo]}>{item.label}</Text>
-            {item.rota === 'Atrasados' && quantidadeAtrasados > 0 && (
+            {quantidadeBadge > 0 && (
               <View style={styles.badge}>
-                <Text style={styles.badgeTexto}>{quantidadeAtrasados}</Text>
+                <Text style={styles.badgeTexto}>{quantidadeBadge}</Text>
               </View>
             )}
           </Pressable>
@@ -131,6 +146,7 @@ function DrawerNavigator() {
         <Drawer.Screen name="Atrasados" component={AtrasadosScreen} />
         <Drawer.Screen name="Historico" component={HistoricoScreen} />
         <Drawer.Screen name="Categorias" component={CategoriasScreen} />
+        <Drawer.Screen name="Compartilhados" component={CompartilhadosScreen} />
         <Drawer.Screen name="Config" component={SettingsScreen} />
       </Drawer.Navigator>
     </View>
