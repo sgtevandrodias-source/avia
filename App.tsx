@@ -8,6 +8,7 @@ import { RootNavigator } from './src/navigation';
 import { navigationRef } from './src/navigation/navigationRef';
 import { ItemsProvider } from './src/context/ItemsContext';
 import { CategoriasProvider } from './src/context/CategoriasContext';
+import { CompartilhamentosProvider } from './src/context/CompartilhamentosContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { useAviaFonts } from './src/theme/typography';
@@ -24,9 +25,11 @@ function Conteudo() {
     <NavigationContainer ref={navigationRef}>
       {usuario ? (
         <CategoriasProvider>
-          <ItemsProvider>
-            <RootNavigator />
-          </ItemsProvider>
+          <CompartilhamentosProvider>
+            <ItemsProvider>
+              <RootNavigator />
+            </ItemsProvider>
+          </CompartilhamentosProvider>
         </CategoriasProvider>
       ) : (
         <LoginScreen />

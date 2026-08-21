@@ -3,10 +3,11 @@ import { obterTokenAtual } from '../auth/sessionToken';
 import { cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { cifrarItemParaEnvio, decifrarItemRecebido } from '../crypto/itemCriptografia';
 import { API_URL } from './config';
-import type { CategoriaItem, Item } from '../types/item';
+import type { CategoriaItem, Item, ItemCompartilhadoLocal } from '../types/item';
 
 const CHAVE_ULTIMA_SYNC = 'ultimaSincronizacao';
 const CHAVE_ULTIMA_SYNC_CATEGORIAS = 'ultimaSincronizacaoCategorias';
+const CHAVE_ULTIMA_SYNC_COMPARTILHAMENTOS = 'ultimaSincronizacaoCompartilhamentos';
 const CHAVE_ULTIMO_USUARIO = 'ultimoUsuarioId';
 const CHAVE_STATUS_SYNC = 'statusUltimaSincronizacao';
 const TIMEOUT_MS = 8000;
@@ -136,6 +137,59 @@ async function receberAlteracoesRemotasCategorias(desde: string | null): Promise
   return servidorEm;
 }
 
+// Compartilhamento (Fase 8): só "puxa" (pull) — não existe fila de push
+// própria, porque as ações do usuário (compartilhar, responder, concluir,
+// remover) já chamam a API na hora, direto de CompartilhamentosContext, sem
+// passar por aqui. O objetivo é só manter o cache local em dia.
+interface CompartilhamentoRemoto {
+  id: string;
+  itemId: string;
+  criadorNome: string;
+  destinatarioNome?: string;
+  status: ItemCompartilhadoLocal['status'];
+  titulo: string;
+  textoOriginal: string;
+  data: string;
+  horaCompromisso: string | null;
+  horaLimite: string | null;
+  tipoHorario: ItemCompartilhadoLocal['tipoHorario'];
+  categoriaNome: string;
+  categoriaIcone: string;
+  categoriaCor: string;
+  notas: string | null;
+  concluidoPeloDestinatario: boolean;
+  atualizadoEm: string;
+  excluido?: boolean;
+}
+
+/** Mesmo raciocínio de receberAlteracoesRemotas: cursor vem do relógio do servidor. */
+async function receberCompartilhamentos(desde: string | null): Promise<string | null> {
+  const resposta = await fetchComTimeout(
+    desde ? `${API_URL}/compartilhamentos?since=${encodeURIComponent(desde)}` : `${API_URL}/compartilhamentos`,
+  );
+  if (!resposta.ok) return null;
+  const {
+    enviados,
+    recebidos,
+    servidorEm,
+  }: { enviados: CompartilhamentoRemoto[]; recebidos: CompartilhamentoRemoto[]; servidorEm: string } =
+    await resposta.json();
+
+  for (const [papel, lista] of [
+    ['enviado', enviados],
+    ['recebido', recebidos],
+  ] as const) {
+    for (const c of lista) {
+      if (c.excluido) {
+        await db.removerItemCompartilhadoLocal(c.id);
+      } else {
+        await db.upsertItemCompartilhadoLocal({ ...c, papel });
+      }
+    }
+  }
+  return servidorEm;
+}
+
 /**
  * Sincroniza o SQLite local com o Worker Cloudflare. Nunca lança erro:
  * se estiver offline, sem sessão, ou o servidor falhar, apenas encerra
@@ -163,6 +217,12 @@ export async function sincronizar(): Promise<{ ok: boolean }> {
     if (servidorEm) {
       await db.setMeta(CHAVE_ULTIMA_SYNC, servidorEm);
     }
+
+    const desdeCompartilhamentos = await db.getMeta(CHAVE_ULTIMA_SYNC_COMPARTILHAMENTOS);
+    const servidorEmCompartilhamentos = await receberCompartilhamentos(desdeCompartilhamentos);
+    if (servidorEmCompartilhamentos) {
+      await db.setMeta(CHAVE_ULTIMA_SYNC_COMPARTILHAMENTOS, servidorEmCompartilhamentos);
+    }
     await db.setMeta(CHAVE_STATUS_SYNC, JSON.stringify({ quando: new Date().toISOString(), ok: true }));
     return { ok: true };
   } catch {
@@ -175,6 +235,7 @@ export async function sincronizar(): Promise<{ ok: boolean }> {
 export async function forcarResyncCompleto(): Promise<void> {
   await db.setMeta(CHAVE_ULTIMA_SYNC, '');
   await db.setMeta(CHAVE_ULTIMA_SYNC_CATEGORIAS, '');
+  await db.setMeta(CHAVE_ULTIMA_SYNC_COMPARTILHAMENTOS, '');
 }
 
 /**

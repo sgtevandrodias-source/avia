@@ -624,9 +624,14 @@ async function tratarCompartilhamentos(
     const servidorEm = new Date().toISOString();
     const since = url.searchParams.get('since');
 
+    // "enviados" sempre traz o nome do destinatário via join (pra UI mostrar
+    // "compartilhado com {nome}") — em ambos os ramos, incremental ou não,
+    // senão um pull incremental devolveria destinatarioNome undefined.
     const enviadosStmt = since
       ? env.DB.prepare(
-          'SELECT * FROM compartilhamentos WHERE criador_id = ? AND atualizado_em > ? ORDER BY atualizado_em ASC',
+          `SELECT c.*, u.nome as destinatario_nome FROM compartilhamentos c
+           JOIN usuarios u ON u.id = c.destinatario_id
+           WHERE c.criador_id = ? AND c.atualizado_em > ? ORDER BY c.atualizado_em ASC`,
         ).bind(usuarioId, since)
       : env.DB.prepare(
           `SELECT c.*, u.nome as destinatario_nome FROM compartilhamentos c

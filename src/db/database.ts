@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
-import type { CategoriaItem, Item, NovaCategoria, NovoItem } from '../types/item';
+import type { CategoriaItem, Item, ItemCompartilhadoLocal, NovaCategoria, NovoItem } from '../types/item';
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -62,6 +62,27 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
         CREATE TABLE IF NOT EXISTS exclusoes_pendentes_categorias (
           id TEXT PRIMARY KEY NOT NULL,
           quando TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS itens_compartilhados (
+          id TEXT PRIMARY KEY NOT NULL,
+          item_id TEXT NOT NULL,
+          papel TEXT NOT NULL,
+          criador_nome TEXT NOT NULL,
+          destinatario_nome TEXT,
+          status TEXT NOT NULL,
+          titulo TEXT NOT NULL,
+          texto_original TEXT NOT NULL,
+          data TEXT NOT NULL,
+          hora_compromisso TEXT,
+          hora_limite TEXT,
+          tipo_horario TEXT NOT NULL,
+          categoria_nome TEXT NOT NULL,
+          categoria_icone TEXT NOT NULL,
+          categoria_cor TEXT NOT NULL,
+          notas TEXT,
+          concluido_pelo_destinatario INTEGER NOT NULL DEFAULT 0,
+          atualizado_em TEXT NOT NULL
         );
       `);
       // Migração: bancos criados antes da sincronização não têm atualizado_em.
@@ -472,6 +493,116 @@ export async function removerExclusaoPendenteCategoria(id: string): Promise<void
   await db.runAsync('DELETE FROM exclusoes_pendentes_categorias WHERE id = ?', [id]);
 }
 
+// ---- Compartilhamento de itens (Fase 8) ----
+// Só cache local de leitura — as ações (compartilhar, responder, concluir,
+// remover) chamam a API na hora (ver CompartilhamentosContext); aqui só se
+// puxa (pull) o que o servidor tem via sync.ts, sem fila de push própria.
+
+interface ItemCompartilhadoRow {
+  id: string;
+  item_id: string;
+  papel: string;
+  criador_nome: string;
+  destinatario_nome: string | null;
+  status: string;
+  titulo: string;
+  texto_original: string;
+  data: string;
+  hora_compromisso: string | null;
+  hora_limite: string | null;
+  tipo_horario: Item['tipoHorario'];
+  categoria_nome: string;
+  categoria_icone: string;
+  categoria_cor: string;
+  notas: string | null;
+  concluido_pelo_destinatario: number;
+  atualizado_em: string;
+}
+
+function rowParaItemCompartilhado(row: ItemCompartilhadoRow): ItemCompartilhadoLocal {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    papel: row.papel as ItemCompartilhadoLocal['papel'],
+    criadorNome: row.criador_nome,
+    destinatarioNome: row.destinatario_nome ?? undefined,
+    status: row.status as ItemCompartilhadoLocal['status'],
+    titulo: row.titulo,
+    textoOriginal: row.texto_original,
+    data: row.data,
+    horaCompromisso: row.hora_compromisso,
+    horaLimite: row.hora_limite,
+    tipoHorario: row.tipo_horario,
+    categoriaNome: row.categoria_nome,
+    categoriaIcone: row.categoria_icone,
+    categoriaCor: row.categoria_cor,
+    notas: row.notas,
+    concluidoPeloDestinatario: row.concluido_pelo_destinatario === 1,
+    atualizadoEm: row.atualizado_em,
+  };
+}
+
+export async function listarItensCompartilhados(): Promise<ItemCompartilhadoLocal[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<ItemCompartilhadoRow>(
+    'SELECT * FROM itens_compartilhados ORDER BY atualizado_em DESC',
+  );
+  return rows.map(rowParaItemCompartilhado);
+}
+
+export async function upsertItemCompartilhadoLocal(item: ItemCompartilhadoLocal): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO itens_compartilhados (
+      id, item_id, papel, criador_nome, destinatario_nome, status, titulo, texto_original, data,
+      hora_compromisso, hora_limite, tipo_horario, categoria_nome, categoria_icone, categoria_cor,
+      notas, concluido_pelo_destinatario, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      papel = excluded.papel,
+      criador_nome = excluded.criador_nome,
+      destinatario_nome = excluded.destinatario_nome,
+      status = excluded.status,
+      titulo = excluded.titulo,
+      texto_original = excluded.texto_original,
+      data = excluded.data,
+      hora_compromisso = excluded.hora_compromisso,
+      hora_limite = excluded.hora_limite,
+      tipo_horario = excluded.tipo_horario,
+      categoria_nome = excluded.categoria_nome,
+      categoria_icone = excluded.categoria_icone,
+      categoria_cor = excluded.categoria_cor,
+      notas = excluded.notas,
+      concluido_pelo_destinatario = excluded.concluido_pelo_destinatario,
+      atualizado_em = excluded.atualizado_em`,
+    [
+      item.id,
+      item.itemId,
+      item.papel,
+      item.criadorNome,
+      item.destinatarioNome ?? null,
+      item.status,
+      item.titulo,
+      item.textoOriginal,
+      item.data,
+      item.horaCompromisso,
+      item.horaLimite,
+      item.tipoHorario,
+      item.categoriaNome,
+      item.categoriaIcone,
+      item.categoriaCor,
+      item.notas,
+      item.concluidoPeloDestinatario ? 1 : 0,
+      item.atualizadoEm,
+    ],
+  );
+}
+
+export async function removerItemCompartilhadoLocal(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM itens_compartilhados WHERE id = ?', [id]);
+}
+
 // ---- Isolamento entre contas (o SQLite local é único por aparelho, não por usuário) ----
 
 /**
@@ -487,5 +618,6 @@ export async function limparTudoLocal(): Promise<void> {
     DELETE FROM categorias;
     DELETE FROM exclusoes_pendentes;
     DELETE FROM exclusoes_pendentes_categorias;
+    DELETE FROM itens_compartilhados;
   `);
 }

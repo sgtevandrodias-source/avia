@@ -36,6 +36,18 @@ export interface Item {
   criadoEm: string; // ISO datetime
   concluidoEm: string | null; // ISO datetime
   atualizadoEm: string; // ISO datetime — usado pela sincronização (last write wins)
+  // Presentes só quando este "Item" na verdade veio de um compartilhamento
+  // aceito (ver utils/compartilhamentos.ts) — nunca gravados no SQLite local
+  // de items nem enviados pro Worker como um Item de verdade. categoria
+  // nesse caso é sempre CATEGORIA_COMPARTILHADO (não existe em
+  // CategoriasContext), então o nome/ícone/cor de exibição vêm daqui, do
+  // snapshot do compartilhamento, em vez de uma busca em CategoriasContext.
+  somenteLeitura?: boolean;
+  compartilhamentoId?: string;
+  compartilhadoPorNome?: string;
+  categoriaNomeCompartilhado?: string;
+  categoriaIconeCompartilhado?: string;
+  categoriaCorCompartilhado?: string;
 }
 
 export const NOTAS_TAMANHO_MAXIMO = 300;
@@ -94,4 +106,42 @@ export function categoriaInfo(categorias: CategoriaItem[], categoriaId: string):
   const encontrada = categorias.find((c) => c.id === categoriaId);
   if (encontrada) return encontrada;
   return { id: categoriaId, criadoEm: '', atualizadoEm: '', ...CATEGORIA_DESCONHECIDA_BASE };
+}
+
+// ---- Compartilhamento de itens entre usuários (ver worker/migrations/0014) ----
+
+/**
+ * Valor de `Item.categoria` pra itens que na verdade vieram de um
+ * compartilhamento aceito — nunca corresponde a uma categoria de verdade em
+ * CategoriasContext (o dono do compartilhamento pode nem ter essa categoria
+ * cadastrada), então `categoriaInfo` nunca deve ser chamada com isso; use
+ * os campos `categoriaNomeCompartilhado`/Icone/Cor do próprio Item.
+ */
+export const CATEGORIA_COMPARTILHADO = '__compartilhado__';
+
+export type PapelCompartilhamento = 'enviado' | 'recebido';
+export type StatusCompartilhamento = 'pendente' | 'aceito' | 'recusado';
+
+// Espelha a tabela local itens_compartilhados (ver src/db/database.ts) —
+// é sempre um snapshot dos campos decifrados no momento do compartilhamento,
+// não uma referência ao Item original (ver comentário na migration 0014).
+export interface ItemCompartilhadoLocal {
+  id: string; // id do COMPARTILHAMENTO, não do item original
+  itemId: string;
+  papel: PapelCompartilhamento;
+  criadorNome: string;
+  destinatarioNome?: string; // só preenchido quando papel === 'enviado' — pra UI mostrar "compartilhado com {nome}"
+  status: StatusCompartilhamento;
+  titulo: string;
+  textoOriginal: string;
+  data: string;
+  horaCompromisso: string | null;
+  horaLimite: string | null;
+  tipoHorario: TipoHorario;
+  categoriaNome: string;
+  categoriaIcone: string;
+  categoriaCor: string;
+  notas: string | null;
+  concluidoPeloDestinatario: boolean;
+  atualizadoEm: string;
 }

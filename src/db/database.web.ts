@@ -1,5 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import type { CategoriaItem, Item, NovaCategoria, NovoItem } from '../types/item';
+import type { CategoriaItem, Item, ItemCompartilhadoLocal, NovaCategoria, NovoItem } from '../types/item';
 import { obterTokenAtual } from '../auth/sessionToken';
 import { cifrarItemParaEnvio, decifrarItemRecebido } from '../crypto/itemCriptografia';
 import { API_URL } from '../sync/config';
@@ -153,3 +153,45 @@ export async function removerExclusaoPendenteCategoria(): Promise<void> {}
 // Build web: nunca teve cache local (cada operação já fala direto com a
 // API, escopada pelo token do usuário logado) — nada pra limpar.
 export async function limparTudoLocal(): Promise<void> {}
+
+// ---- Compartilhamento de itens (Fase 8) ----
+
+interface CompartilhamentoApiResposta {
+  id: string;
+  itemId: string;
+  criadorNome: string;
+  destinatarioNome?: string;
+  status: ItemCompartilhadoLocal['status'];
+  titulo: string;
+  textoOriginal: string;
+  data: string;
+  horaCompromisso: string | null;
+  horaLimite: string | null;
+  tipoHorario: ItemCompartilhadoLocal['tipoHorario'];
+  categoriaNome: string;
+  categoriaIcone: string;
+  categoriaCor: string;
+  notas: string | null;
+  concluidoPeloDestinatario: boolean;
+  atualizadoEm: string;
+}
+
+// Build web: sem cache local, então cada leitura busca fresco da API (mesmo
+// padrão de listarItens/listarCategorias) — as ações (compartilhar,
+// responder, concluir, remover) em CompartilhamentosContext chamam a API
+// direto e recarregam essa lista depois.
+export async function listarItensCompartilhados(): Promise<ItemCompartilhadoLocal[]> {
+  const { enviados, recebidos } = await request<{
+    enviados: CompartilhamentoApiResposta[];
+    recebidos: CompartilhamentoApiResposta[];
+    servidorEm: string;
+  }>('/compartilhamentos');
+
+  return [
+    ...enviados.map((c): ItemCompartilhadoLocal => ({ ...c, papel: 'enviado' })),
+    ...recebidos.map((c): ItemCompartilhadoLocal => ({ ...c, papel: 'recebido' })),
+  ];
+}
+
+export async function upsertItemCompartilhadoLocal(): Promise<void> {}
+export async function removerItemCompartilhadoLocal(): Promise<void> {}
