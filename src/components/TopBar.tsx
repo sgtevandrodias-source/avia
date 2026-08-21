@@ -105,7 +105,13 @@ export function TopBar({ titulo, saudacao, cor = colors.border }: Props) {
   return (
     <View style={[styles.header, { borderBottomColor: cor }]}>
       <View style={styles.linha}>
-        <Pressable onPress={abrirDrawer} style={styles.botaoIcone} hitSlop={8}>
+        <Pressable
+          onPress={abrirDrawer}
+          style={styles.botaoIcone}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir menu"
+        >
           <Text style={styles.iconeMenu}>☰</Text>
         </Pressable>
         {saudacao ? (
@@ -138,6 +144,8 @@ export function TopBar({ titulo, saudacao, cor = colors.border }: Props) {
           onPress={() => (buscaAberta ? fecharBusca() : setBuscaAberta(true))}
           style={styles.botaoIcone}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={buscaAberta ? 'Fechar busca' : 'Buscar'}
         >
           <Ionicons name={buscaAberta ? 'close' : 'search'} size={20} color={colors.textPrimary} />
         </Pressable>

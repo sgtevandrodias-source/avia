@@ -183,7 +183,12 @@ export function CapturaRapida() {
       {texto.trim().length === 0 ? (
         // Campo vazio: só o microfone, pra não poluir a barra com um botão
         // "+" que ainda não tem o que adicionar.
-        <Pressable onPress={alternarDitado} hitSlop={8}>
+        <Pressable
+          onPress={alternarDitado}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={ouvindo ? 'Parar ditado' : 'Ditar por voz'}
+        >
           <Animated.View
             style={[
               styles.botaoMic,

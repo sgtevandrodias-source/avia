@@ -85,7 +85,13 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           {atrasado && <Text style={styles.avisoAtrasado}>⚠️ Atrasado</Text>}
         </View>
       </Animated.View>
-      <Pressable onPress={excluir} hitSlop={8} style={styles.botaoExcluir}>
+      <Pressable
+        onPress={excluir}
+        hitSlop={8}
+        style={styles.botaoExcluir}
+        accessibilityRole="button"
+        accessibilityLabel="Excluir item"
+      >
         <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
       </Pressable>
     </Pressable>
