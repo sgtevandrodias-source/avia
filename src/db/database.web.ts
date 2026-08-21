@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { CategoriaItem, Item, NovaCategoria, NovoItem } from '../types/item';
 import { obterTokenAtual } from '../auth/sessionToken';
+import { cifrarItemParaEnvio, decifrarItemRecebido } from '../crypto/itemCriptografia';
 import { API_URL } from '../sync/config';
 
 // Build web: não há SQLite local (expo-sqlite não builda no Metro web),
@@ -23,7 +24,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function listarItens(): Promise<Item[]> {
   const itens = await request<Item[]>('/items');
-  return itens.slice().sort((a, b) => a.data.localeCompare(b.data));
+  return itens.map((item) => decifrarItemRecebido(item)).sort((a, b) => a.data.localeCompare(b.data));
 }
 
 export async function criarItem(novoItem: NovoItem): Promise<Item> {
@@ -40,13 +41,13 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
     concluidoEm: null,
     atualizadoEm: agora,
   };
-  await request('/items', { method: 'POST', body: JSON.stringify(item) });
+  await request('/items', { method: 'POST', body: JSON.stringify(cifrarItemParaEnvio(item)) });
   return item;
 }
 
 export async function atualizarItem(item: Item): Promise<void> {
   const atualizado: Item = { ...item, atualizadoEm: new Date().toISOString() };
-  await request(`/items/${item.id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
+  await request(`/items/${item.id}`, { method: 'PUT', body: JSON.stringify(cifrarItemParaEnvio(atualizado)) });
 }
 
 export async function marcarStatus(id: string, status: Item['status']): Promise<void> {
@@ -77,6 +78,10 @@ export async function marcarRecorrenciaGeradaAte(id: string, data: string): Prom
 export async function excluirItem(id: string): Promise<void> {
   await request(`/items/${id}`, { method: 'DELETE' });
 }
+
+// Build web: sem cache local pra "tocar" — a migração pós-configuração de
+// criptografia usa o loop de atualizarItem() direto (ver ConfigurarCriptografiaScreen).
+export async function tocarTodosItens(): Promise<void> {}
 
 export async function upsertItemLocal(): Promise<void> {}
 export async function removerItemLocal(): Promise<void> {}

@@ -221,6 +221,18 @@ export async function atualizarItem(item: Item): Promise<void> {
   );
 }
 
+/**
+ * Bump de `atualizado_em` em toda linha, sem mexer em mais nada — usado só
+ * pra forçar o próximo `sincronizar()` a reenviar todo mundo (ex.: depois de
+ * configurar a criptografia, pra recifrar e reenviar os itens que já
+ * existiam em texto puro). Não passa pelo `atualizarItem`/`ItemsContext`
+ * de propósito, pra não disparar reagendamento de notificação por item.
+ */
+export async function tocarTodosItens(): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('UPDATE items SET atualizado_em = ?', [new Date().toISOString()]);
+}
+
 export async function marcarStatus(id: string, status: Item['status']): Promise<void> {
   const db = await getDb();
   const agora = new Date().toISOString();

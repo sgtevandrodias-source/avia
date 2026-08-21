@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { campoOuBloqueado } from '../crypto/itemCriptografia';
 import type { Item } from '../types/item';
 
 Notifications.setNotificationHandler({
@@ -43,7 +44,7 @@ export async function agendarNotificacaoDoItem(item: Item): Promise<string | nul
 
   return Notifications.scheduleNotificationAsync({
     content: {
-      title: item.titulo,
+      title: campoOuBloqueado(item.titulo) ?? item.titulo,
       body:
         item.tipoHorario === 'compromisso'
           ? `Compromisso às ${item.horaCompromisso}`

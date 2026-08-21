@@ -14,3 +14,10 @@ export function abrirDrawer(): void {
     navigationRef.dispatch(DrawerActions.openDrawer());
   }
 }
+
+/** Mesmo raciocínio de abrirDrawer(): navega a partir de um componente fora da árvore do Stack. */
+export function navegarPara(rota: string, params?: object): void {
+  if (navigationRef.isReady()) {
+    (navigationRef.navigate as (rota: string, params?: object) => void)(rota, params);
+  }
+}

@@ -66,6 +66,27 @@ interface UsuarioRow {
   criado_em: string;
 }
 
+// Envelope de criptografia ponta a ponta (ver worker/migrations/0013_cifra.sql).
+// O Worker nunca vê a frase-senha, o código de recuperação nem a DEK em si —
+// só guarda os blobs já cifrados pelo cliente e os salts do PBKDF2.
+interface CifraRow {
+  versao: number;
+  kdf_iteracoes: number;
+  salt_senha: string;
+  dek_cifrada_por_senha: string;
+  salt_recuperacao: string;
+  dek_cifrada_por_recuperacao: string;
+}
+
+interface CifraApi {
+  versao: number;
+  kdfIteracoes: number;
+  saltSenha: string;
+  dekCifradaPorSenha: string;
+  saltRecuperacao: string;
+  dekCifradaPorRecuperacao: string;
+}
+
 interface CategoriaApi {
   id: string;
   nome: string;
@@ -533,6 +554,49 @@ async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota
     }
     const senhaHash = await hashSenha(senha);
     await env.DB.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').bind(senhaHash, usuarioId).run();
+    return json({ ok: true });
+  }
+
+  if (rota === 'cifra' && request.method === 'GET') {
+    const row = await env.DB.prepare(
+      'SELECT versao, kdf_iteracoes, salt_senha, dek_cifrada_por_senha, salt_recuperacao, dek_cifrada_por_recuperacao FROM cifra_usuario WHERE usuario_id = ?',
+    )
+      .bind(usuarioId)
+      .first<CifraRow>();
+    if (!row) {
+      return json({ erro: 'Criptografia não configurada' }, 404);
+    }
+    const resposta: CifraApi = {
+      versao: row.versao,
+      kdfIteracoes: row.kdf_iteracoes,
+      saltSenha: row.salt_senha,
+      dekCifradaPorSenha: row.dek_cifrada_por_senha,
+      saltRecuperacao: row.salt_recuperacao,
+      dekCifradaPorRecuperacao: row.dek_cifrada_por_recuperacao,
+    };
+    return json(resposta);
+  }
+
+  if (rota === 'cifra' && request.method === 'PUT') {
+    const corpo = (await request.json()) as Partial<CifraApi>;
+    const { kdfIteracoes, saltSenha, dekCifradaPorSenha, saltRecuperacao, dekCifradaPorRecuperacao } = corpo;
+    if (!kdfIteracoes || !saltSenha || !dekCifradaPorSenha || !saltRecuperacao || !dekCifradaPorRecuperacao) {
+      return json({ erro: 'Envelope de criptografia incompleto' }, 400);
+    }
+    const agora = new Date().toISOString();
+    await env.DB.prepare(
+      `INSERT INTO cifra_usuario (usuario_id, versao, kdf_iteracoes, salt_senha, dek_cifrada_por_senha, salt_recuperacao, dek_cifrada_por_recuperacao, criado_em, atualizado_em)
+       VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(usuario_id) DO UPDATE SET
+         kdf_iteracoes = excluded.kdf_iteracoes,
+         salt_senha = excluded.salt_senha,
+         dek_cifrada_por_senha = excluded.dek_cifrada_por_senha,
+         salt_recuperacao = excluded.salt_recuperacao,
+         dek_cifrada_por_recuperacao = excluded.dek_cifrada_por_recuperacao,
+         atualizado_em = excluded.atualizado_em`,
+    )
+      .bind(usuarioId, kdfIteracoes, saltSenha, dekCifradaPorSenha, saltRecuperacao, dekCifradaPorRecuperacao, agora, agora)
+      .run();
     return json({ ok: true });
   }
 

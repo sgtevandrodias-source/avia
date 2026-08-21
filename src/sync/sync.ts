@@ -1,6 +1,7 @@
 import * as db from '../db/database';
 import { obterTokenAtual } from '../auth/sessionToken';
 import { cancelarNotificacoesDoItem } from '../notifications/notifications';
+import { cifrarItemParaEnvio, decifrarItemRecebido } from '../crypto/itemCriptografia';
 import { API_URL } from './config';
 import type { CategoriaItem, Item } from '../types/item';
 
@@ -46,7 +47,7 @@ async function enviarAlteracoesLocais(desde: string | null): Promise<void> {
     await fetchComTimeout(`${API_URL}/items`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item),
+      body: JSON.stringify(cifrarItemParaEnvio(item)),
     });
   }
 }
@@ -56,7 +57,8 @@ async function receberAlteracoesRemotas(desde: string | null): Promise<void> {
     desde ? `${API_URL}/items?since=${encodeURIComponent(desde)}` : `${API_URL}/items`,
   );
   if (!resposta.ok) return;
-  const remotos: ItemRemoto[] = await resposta.json();
+  const recebidos: ItemRemoto[] = await resposta.json();
+  const remotos = recebidos.map((item) => decifrarItemRecebido(item));
   const locais = await db.itensAlteradosDesde(null);
   const mapaLocal = new Map(locais.map((i) => [i.id, i]));
 
@@ -164,4 +166,25 @@ export async function prepararSessaoParaUsuario(usuarioId: string): Promise<void
   }
   await db.setMeta(CHAVE_ULTIMO_USUARIO, usuarioId);
   await forcarResyncCompleto();
+}
+
+/**
+ * Depois de desbloquear a criptografia (frase-senha ou código de
+ * recuperação), o cache SQLite local pode ter itens que foram puxados do
+ * servidor ENQUANTO o aparelho estava bloqueado — ficaram salvos com
+ * titulo/textoOriginal/notas ainda cifrados (ver receberAlteracoesRemotas).
+ * Um resync normal não resolveria isso: o LWW compara `atualizadoEm`, que
+ * não mudou, então a versão "mais nova" do servidor nunca seria reaplicada.
+ * Em vez disso, decifra em cima do que já está no SQLite, sem rede — no web
+ * não existe cache local (cada leitura já decifra na hora, ver
+ * database.web.ts), então essa função é só relevante no nativo.
+ */
+export async function redecifrarCacheLocalAposDesbloqueio(): Promise<void> {
+  const locais = await db.itensAlteradosDesde(null);
+  for (const item of locais) {
+    const decifrado = decifrarItemRecebido(item);
+    if (decifrado !== item) {
+      await db.upsertItemLocal(decifrado);
+    }
+  }
 }

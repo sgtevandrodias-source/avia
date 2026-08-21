@@ -14,6 +14,9 @@ import { HistoricoScreen } from '../screens/HistoricoScreen';
 import { CategoriasScreen } from '../screens/CategoriasScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
+import { ConfigurarCriptografiaScreen } from '../screens/ConfigurarCriptografiaScreen';
+import { DesbloquearCriptografiaScreen } from '../screens/DesbloquearCriptografiaScreen';
+import { CriptografiaAvisos } from '../components/CriptografiaAvisos';
 import { useItems } from '../context/ItemsContext';
 import { colors, corPorPeriodo, corPorPeriodoSoft } from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -103,6 +106,7 @@ function DrawerNavigator() {
           navigationRef.ts). */}
       <SafeAreaView edges={['top']} style={{ backgroundColor: colors.surface }}>
         <TopBar titulo={configTopo.titulo} saudacao={configTopo.saudacao} cor={configTopo.cor} />
+        <CriptografiaAvisos />
         <CapturaRapida />
       </SafeAreaView>
       <Drawer.Navigator
@@ -142,6 +146,26 @@ export function RootNavigator() {
         component={ItemDetailScreen}
         options={{
           title: 'Detalhe',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: colors.surface },
+          headerTitleStyle: { fontFamily: fonts.bold },
+        }}
+      />
+      <Stack.Screen
+        name="ConfigurarCriptografia"
+        component={ConfigurarCriptografiaScreen}
+        options={{
+          title: 'Criptografia',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: colors.surface },
+          headerTitleStyle: { fontFamily: fonts.bold },
+        }}
+      />
+      <Stack.Screen
+        name="DesbloquearCriptografia"
+        component={DesbloquearCriptografiaScreen}
+        options={{
+          title: 'Desbloquear',
           presentation: 'modal',
           headerStyle: { backgroundColor: colors.surface },
           headerTitleStyle: { fontFamily: fonts.bold },

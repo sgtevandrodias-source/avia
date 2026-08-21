@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { colors } from '../theme/colors';
@@ -8,8 +9,9 @@ import { fonts } from '../theme/typography';
 import { avisar, confirmar } from '../utils/confirm';
 
 export function SettingsScreen() {
+  const navigation = useNavigation<any>();
   const { sincronizando, sincronizarAgora } = useItems();
-  const { usuario, logout, definirSenha } = useAuth();
+  const { usuario, logout, definirSenha, criptografiaConfigurada, criptografiaBloqueada } = useAuth();
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [salvandoSenha, setSalvandoSenha] = useState(false);
@@ -82,6 +84,38 @@ export function SettingsScreen() {
             <Text style={styles.botaoSalvarSenhaTexto}>Salvar senha</Text>
           )}
         </Pressable>
+      </View>
+
+      <Text style={styles.secao}>Criptografia</Text>
+      <View style={styles.cartaoSenha}>
+        {criptografiaBloqueada ? (
+          <>
+            <Text style={styles.textoAjudaSenha}>
+              Este aparelho ainda não tem a chave dessa conta. Título, descrição e notas ficam ocultos até você
+              desbloquear.
+            </Text>
+            <Pressable style={styles.botaoSalvarSenha} onPress={() => navigation.navigate('DesbloquearCriptografia')}>
+              <Text style={styles.botaoSalvarSenhaTexto}>Desbloquear</Text>
+            </Pressable>
+          </>
+        ) : criptografiaConfigurada ? (
+          <Text style={styles.textoAjudaSenha}>
+            ✓ Ativada — título, descrição e notas são cifrados antes de sair do aparelho.
+          </Text>
+        ) : (
+          <>
+            <Text style={styles.textoAjudaSenha}>
+              Opcional: cifre título, descrição e notas com uma frase secreta só sua, pra que nem quem administra o
+              AVIA consiga ler esse conteúdo.
+            </Text>
+            <Pressable
+              style={styles.botaoSalvarSenha}
+              onPress={() => navigation.navigate('ConfigurarCriptografia')}
+            >
+              <Text style={styles.botaoSalvarSenhaTexto}>Configurar criptografia</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <Text style={styles.secao}>Sincronização</Text>

@@ -15,6 +15,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
+import { campoOuBloqueado, tituloOuNotasBloqueados } from '../crypto/itemCriptografia';
 import { SeletorHora } from '../components/SeletorHora';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
@@ -64,7 +65,8 @@ export function ItemDetailScreen() {
     concluidoEm: null,
   };
 
-  const [titulo, setTitulo] = useState(base.titulo ?? '');
+  const bloqueado = !ehNovo && tituloOuNotasBloqueados(itemExistente as Item);
+  const [titulo, setTitulo] = useState(campoOuBloqueado(base.titulo ?? '') ?? '');
   const [dataTexto, setDataTexto] = useState(
     base.data ? format(parse(base.data, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy') : '',
   );
@@ -74,13 +76,19 @@ export function ItemDetailScreen() {
   const [categoria, setCategoria] = useState<Categoria>(base.categoria ?? 'outro');
   const [recorrencia, setRecorrencia] = useState<Recorrencia>(base.recorrencia ?? 'nenhuma');
   const [lembreteOffsetMinutos, setLembreteOffsetMinutos] = useState(base.lembreteOffsetMinutos ?? 0);
-  const [notas, setNotas] = useState(base.notas ?? '');
+  const [notas, setNotas] = useState(campoOuBloqueado(base.notas ?? '') ?? '');
   const [status, setStatus] = useState(base.status ?? 'pendente');
   const [mostrarCalendario, setMostrarCalendario] = useState(false);
   const [seletorHoraAberto, setSeletorHoraAberto] = useState<'compromisso' | 'prazo' | null>(null);
 
   const salvar = async () => {
-    if (!titulo.trim()) {
+    // Aparelho bloqueado (sem a DEK): titulo/notas exibidos são só o
+    // placeholder "🔒 Conteúdo bloqueado", não o texto de verdade — salvar o
+    // que está na tela sobrescreveria o item cifrado com esse placeholder
+    // (ou, pior, com texto novo em texto puro, já que sem DEK não tem como
+    // cifrar). Por isso os dois campos ficam intocados nesse caso; só os
+    // campos estruturados abaixo (data, categoria, status, etc.) são salvos.
+    if (!bloqueado && !titulo.trim()) {
       avisar('Título vazio', 'Escreva um título antes de salvar.');
       return;
     }
@@ -91,7 +99,7 @@ export function ItemDetailScreen() {
     }
 
     const dadosComuns = {
-      titulo: titulo.trim(),
+      titulo: bloqueado ? (itemExistente as Item).titulo : titulo.trim(),
       data: format(dataParseada, 'yyyy-MM-dd'),
       tipoHorario,
       horaCompromisso: tipoHorario === 'compromisso' ? horaCompromisso || null : null,
@@ -99,7 +107,7 @@ export function ItemDetailScreen() {
       categoria,
       recorrencia,
       lembreteOffsetMinutos,
-      notas: notas.trim() ? notas.trim() : null,
+      notas: bloqueado ? (itemExistente as Item).notas : notas.trim() ? notas.trim() : null,
     };
 
     if (ehNovo) {
@@ -134,7 +142,18 @@ export function ItemDetailScreen() {
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.label}>Título</Text>
-          <TextInput style={styles.input} value={titulo} onChangeText={setTitulo} placeholder="Título" />
+          <TextInput
+            style={styles.input}
+            value={titulo}
+            onChangeText={setTitulo}
+            placeholder="Título"
+            editable={!bloqueado}
+          />
+          {bloqueado && (
+            <Text style={styles.avisoBloqueado}>
+              Desbloqueie a criptografia em Configurações pra ver e editar o título e as notas deste item.
+            </Text>
+          )}
 
           <Text style={styles.label}>Data</Text>
           {Platform.OS === 'web' ? (
@@ -279,6 +298,7 @@ export function ItemDetailScreen() {
             maxLength={NOTAS_TAMANHO_MAXIMO}
             multiline
             textAlignVertical="top"
+            editable={!bloqueado}
           />
 
           {!ehNovo && (
@@ -353,6 +373,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.textMuted,
+  },
+  avisoBloqueado: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 6,
   },
   linhaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {

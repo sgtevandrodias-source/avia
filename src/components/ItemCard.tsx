@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { CheckboxConcluir } from './CheckboxConcluir';
 import { useCategorias } from '../context/CategoriasContext';
 import { useItems } from '../context/ItemsContext';
+import { campoOuBloqueado } from '../crypto/itemCriptografia';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { dataHoraLimiteDoItem } from '../utils/periodos';
@@ -21,6 +22,7 @@ interface Props {
 
 export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   const { alternarPrioridade, removerItem } = useItems();
+  const titulo = campoOuBloqueado(item.titulo) ?? item.titulo;
 
   const marcarPrioridade = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -28,7 +30,7 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   };
 
   const excluir = () => {
-    confirmar('Excluir item', `Tem certeza que deseja excluir "${item.titulo}"?`, () => {
+    confirmar('Excluir item', `Tem certeza que deseja excluir "${titulo}"?`, () => {
       removerItem(item.id);
     });
   };
@@ -70,7 +72,7 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           numberOfLines={2}
         >
           {item.prioridade ? '⭐ ' : ''}
-          {item.titulo}
+          {titulo}
         </Text>
         <View style={styles.linhaMeta}>
           <Text style={styles.categoria}>
