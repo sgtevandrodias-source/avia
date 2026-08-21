@@ -513,6 +513,284 @@ async function tratarCategorias(
   return json({ erro: 'Método não suportado' }, 405);
 }
 
+// Compartilhamento de um item com outro usuário (ver migrations/0014).
+// Snapshot dos campos decifrados no aparelho de quem compartilha — o
+// servidor nunca lê titulo/notas de um item cifrado, então não dá pra
+// guardar só uma referência ao item original (ver comentário na migration).
+interface CompartilhamentoRow {
+  id: string;
+  item_id: string;
+  criador_id: string;
+  criador_nome: string;
+  destinatario_id: string;
+  status: string;
+  titulo: string;
+  texto_original: string;
+  data: string;
+  hora_compromisso: string | null;
+  hora_limite: string | null;
+  tipo_horario: string;
+  categoria_nome: string;
+  categoria_icone: string;
+  categoria_cor: string;
+  notas: string | null;
+  concluido_pelo_destinatario: number;
+  excluido: number;
+  criado_em: string;
+  atualizado_em: string;
+}
+
+interface CompartilhamentoApi {
+  id: string;
+  itemId: string;
+  criadorId: string;
+  criadorNome: string;
+  destinatarioId: string;
+  destinatarioNome?: string; // só presente numa consulta com join (ver enviados em GET /compartilhamentos) — não é coluna própria.
+  status: string;
+  titulo: string;
+  textoOriginal: string;
+  data: string;
+  horaCompromisso: string | null;
+  horaLimite: string | null;
+  tipoHorario: string;
+  categoriaNome: string;
+  categoriaIcone: string;
+  categoriaCor: string;
+  notas: string | null;
+  concluidoPeloDestinatario: boolean;
+  criadoEm: string;
+  atualizadoEm: string;
+  excluido?: boolean;
+}
+
+function compartilhamentoRowParaApi(
+  row: CompartilhamentoRow & { destinatario_nome?: string },
+): CompartilhamentoApi {
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    criadorId: row.criador_id,
+    criadorNome: row.criador_nome,
+    destinatarioId: row.destinatario_id,
+    destinatarioNome: row.destinatario_nome,
+    status: row.status,
+    titulo: row.titulo,
+    textoOriginal: row.texto_original,
+    data: row.data,
+    horaCompromisso: row.hora_compromisso,
+    horaLimite: row.hora_limite,
+    tipoHorario: row.tipo_horario,
+    categoriaNome: row.categoria_nome,
+    categoriaIcone: row.categoria_icone,
+    categoriaCor: row.categoria_cor,
+    notas: row.notas,
+    concluidoPeloDestinatario: row.concluido_pelo_destinatario === 1,
+    criadoEm: row.criado_em,
+    atualizadoEm: row.atualizado_em,
+    excluido: row.excluido === 1,
+  };
+}
+
+/** GET /usuarios/buscar?email=... — busca exata por e-mail, nunca lista/filtra por outro critério (não expor a base de contas). */
+async function tratarUsuariosBusca(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method !== 'GET') return json({ erro: 'Método não suportado' }, 405);
+  const email = url.searchParams.get('email');
+  if (!email) return json({ erro: 'email é obrigatório' }, 400);
+  const usuario = await env.DB.prepare('SELECT id, nome FROM usuarios WHERE email = ?')
+    .bind(email)
+    .first<{ id: string; nome: string }>();
+  if (!usuario) return json({ erro: 'Essa pessoa ainda não tem conta no Avia' }, 404);
+  return json(usuario);
+}
+
+async function buscarCompartilhamentoPorId(db: D1Database, id: string): Promise<CompartilhamentoRow | null> {
+  const row = await db.prepare('SELECT * FROM compartilhamentos WHERE id = ?').bind(id).first<CompartilhamentoRow>();
+  return row ?? null;
+}
+
+async function tratarCompartilhamentos(
+  request: Request,
+  env: Env,
+  usuarioId: string,
+  id: string | undefined,
+  subrota: string | undefined,
+  url: URL,
+): Promise<Response> {
+  // GET /compartilhamentos  ou  GET /compartilhamentos?since=ISO
+  if (request.method === 'GET' && !id) {
+    // Mesmo raciocínio do cursor de items/categorias: o timestamp vem do
+    // relógio do SERVIDOR, capturado antes da consulta.
+    const servidorEm = new Date().toISOString();
+    const since = url.searchParams.get('since');
+
+    const enviadosStmt = since
+      ? env.DB.prepare(
+          'SELECT * FROM compartilhamentos WHERE criador_id = ? AND atualizado_em > ? ORDER BY atualizado_em ASC',
+        ).bind(usuarioId, since)
+      : env.DB.prepare(
+          `SELECT c.*, u.nome as destinatario_nome FROM compartilhamentos c
+           JOIN usuarios u ON u.id = c.destinatario_id
+           WHERE c.criador_id = ? AND c.excluido = 0 ORDER BY c.atualizado_em DESC`,
+        ).bind(usuarioId);
+    const recebidosStmt = since
+      ? env.DB.prepare(
+          'SELECT * FROM compartilhamentos WHERE destinatario_id = ? AND atualizado_em > ? ORDER BY atualizado_em ASC',
+        ).bind(usuarioId, since)
+      : env.DB.prepare(
+          'SELECT * FROM compartilhamentos WHERE destinatario_id = ? AND excluido = 0 ORDER BY atualizado_em DESC',
+        ).bind(usuarioId);
+
+    const [{ results: enviados }, { results: recebidos }] = await Promise.all([
+      enviadosStmt.all<CompartilhamentoRow & { destinatario_nome?: string }>(),
+      recebidosStmt.all<CompartilhamentoRow>(),
+    ]);
+
+    return json({
+      enviados: enviados.map(compartilhamentoRowParaApi),
+      recebidos: recebidos.map(compartilhamentoRowParaApi),
+      servidorEm,
+    });
+  }
+
+  // POST /compartilhamentos — cria ou atualiza (upsert por item_id+destinatario) um convite de compartilhamento.
+  if (request.method === 'POST' && !id) {
+    const corpo = (await request.json()) as {
+      itemId?: string;
+      emailDestinatario?: string;
+      titulo?: string;
+      textoOriginal?: string;
+      data?: string;
+      horaCompromisso?: string | null;
+      horaLimite?: string | null;
+      tipoHorario?: string;
+      categoriaNome?: string;
+      categoriaIcone?: string;
+      categoriaCor?: string;
+      notas?: string | null;
+    };
+    const {
+      itemId,
+      emailDestinatario,
+      titulo,
+      textoOriginal,
+      data,
+      tipoHorario,
+      categoriaNome,
+      categoriaIcone,
+      categoriaCor,
+    } = corpo;
+    if (!itemId || !emailDestinatario || !titulo || !textoOriginal || !data || !tipoHorario || !categoriaNome || !categoriaIcone || !categoriaCor) {
+      return json({ erro: 'Dados incompletos pra compartilhar' }, 400);
+    }
+
+    const item = await buscarPorId(env.DB, itemId, usuarioId);
+    if (!item) return json({ erro: 'Item não encontrado' }, 403);
+
+    const destinatario = await env.DB.prepare('SELECT id, nome FROM usuarios WHERE email = ?')
+      .bind(emailDestinatario)
+      .first<{ id: string; nome: string }>();
+    if (!destinatario) return json({ erro: 'Essa pessoa ainda não tem conta no Avia' }, 404);
+    if (destinatario.id === usuarioId) {
+      return json({ erro: 'Não é possível compartilhar consigo mesmo' }, 400);
+    }
+
+    const criador = await env.DB.prepare('SELECT nome FROM usuarios WHERE id = ?')
+      .bind(usuarioId)
+      .first<{ nome: string }>();
+
+    const agora = new Date().toISOString();
+    const novoId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO compartilhamentos (
+        id, item_id, criador_id, criador_nome, destinatario_id, status,
+        titulo, texto_original, data, hora_compromisso, hora_limite, tipo_horario,
+        categoria_nome, categoria_icone, categoria_cor, notas,
+        concluido_pelo_destinatario, excluido, criado_em, atualizado_em
+      ) VALUES (?, ?, ?, ?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+      ON CONFLICT(item_id, destinatario_id) DO UPDATE SET
+        status = 'pendente',
+        titulo = excluded.titulo,
+        texto_original = excluded.texto_original,
+        data = excluded.data,
+        hora_compromisso = excluded.hora_compromisso,
+        hora_limite = excluded.hora_limite,
+        tipo_horario = excluded.tipo_horario,
+        categoria_nome = excluded.categoria_nome,
+        categoria_icone = excluded.categoria_icone,
+        categoria_cor = excluded.categoria_cor,
+        notas = excluded.notas,
+        excluido = 0,
+        atualizado_em = excluded.atualizado_em`,
+    )
+      .bind(
+        novoId,
+        itemId,
+        usuarioId,
+        criador?.nome ?? '',
+        destinatario.id,
+        titulo,
+        textoOriginal,
+        data,
+        corpo.horaCompromisso ?? null,
+        corpo.horaLimite ?? null,
+        tipoHorario,
+        categoriaNome,
+        categoriaIcone,
+        categoriaCor,
+        corpo.notas ?? null,
+        agora,
+        agora,
+      )
+      .run();
+
+    return json({ ok: true });
+  }
+
+  if (!id) return json({ erro: 'Rota não encontrada' }, 404);
+
+  // POST /compartilhamentos/:id/responder — só o destinatário aceita/recusa.
+  if (request.method === 'POST' && subrota === 'responder') {
+    const registro = await buscarCompartilhamentoPorId(env.DB, id);
+    if (!registro || registro.excluido) return json({ erro: 'Compartilhamento não encontrado' }, 404);
+    if (registro.destinatario_id !== usuarioId) return json({ erro: 'Não autorizado' }, 403);
+
+    const { aceitar } = (await request.json()) as { aceitar?: boolean };
+    await env.DB.prepare('UPDATE compartilhamentos SET status = ?, atualizado_em = ? WHERE id = ?')
+      .bind(aceitar ? 'aceito' : 'recusado', new Date().toISOString(), id)
+      .run();
+    return json({ ok: true });
+  }
+
+  // PUT /compartilhamentos/:id/concluir — só o destinatário marca como feito/pendente.
+  if (request.method === 'PUT' && subrota === 'concluir') {
+    const registro = await buscarCompartilhamentoPorId(env.DB, id);
+    if (!registro || registro.excluido) return json({ erro: 'Compartilhamento não encontrado' }, 404);
+    if (registro.destinatario_id !== usuarioId) return json({ erro: 'Não autorizado' }, 403);
+
+    const { concluido } = (await request.json()) as { concluido?: boolean };
+    await env.DB.prepare('UPDATE compartilhamentos SET concluido_pelo_destinatario = ?, atualizado_em = ? WHERE id = ?')
+      .bind(concluido ? 1 : 0, new Date().toISOString(), id)
+      .run();
+    return json({ ok: true });
+  }
+
+  // DELETE /compartilhamentos/:id — o criador revoga ou o destinatário remove da própria agenda.
+  if (request.method === 'DELETE' && !subrota) {
+    const registro = await buscarCompartilhamentoPorId(env.DB, id);
+    if (!registro || registro.excluido) return json({ erro: 'Compartilhamento não encontrado' }, 404);
+    if (registro.criador_id !== usuarioId && registro.destinatario_id !== usuarioId) {
+      return json({ erro: 'Não autorizado' }, 403);
+    }
+    await env.DB.prepare('UPDATE compartilhamentos SET excluido = 1, atualizado_em = ? WHERE id = ?')
+      .bind(new Date().toISOString(), id)
+      .run();
+    return json({ ok: true });
+  }
+
+  return json({ erro: 'Rota não encontrada' }, 404);
+}
+
 interface ArquivoRow {
   id: string;
   usuario_id: string;
@@ -646,6 +924,14 @@ export default {
 
       if (partes[0] === 'usuario') {
         return await tratarUsuario(request, env, usuarioId, partes[1]);
+      }
+
+      if (partes[0] === 'usuarios' && partes[1] === 'buscar') {
+        return await tratarUsuariosBusca(request, env, url);
+      }
+
+      if (partes[0] === 'compartilhamentos') {
+        return await tratarCompartilhamentos(request, env, usuarioId, partes[1], partes[2], url);
       }
 
       if (partes[0] === 'arquivo') {
