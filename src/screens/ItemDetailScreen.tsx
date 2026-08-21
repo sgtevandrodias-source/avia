@@ -78,6 +78,7 @@ export function ItemDetailScreen() {
   const [lembreteOffsetMinutos, setLembreteOffsetMinutos] = useState(base.lembreteOffsetMinutos ?? 0);
   const [notas, setNotas] = useState(campoOuBloqueado(base.notas ?? '') ?? '');
   const [status, setStatus] = useState(base.status ?? 'pendente');
+  const [prioridade, setPrioridade] = useState(base.prioridade ?? false);
   const [mostrarCalendario, setMostrarCalendario] = useState(false);
   const [seletorHoraAberto, setSeletorHoraAberto] = useState<'compromisso' | 'prazo' | null>(null);
 
@@ -108,6 +109,7 @@ export function ItemDetailScreen() {
       recorrencia,
       lembreteOffsetMinutos,
       notas: bloqueado ? (itemExistente as Item).notas : notas.trim() ? notas.trim() : null,
+      prioridade,
     };
 
     if (ehNovo) {
@@ -301,16 +303,25 @@ export function ItemDetailScreen() {
             editable={!bloqueado}
           />
 
-          {!ehNovo && (
+          <View style={styles.linhaChips}>
             <Pressable
-              style={[styles.chip, status === 'feito' && styles.chipConcluido, styles.chipStatus]}
-              onPress={() => setStatus(status === 'feito' ? 'pendente' : 'feito')}
+              style={[styles.chip, styles.chipStatus, prioridade && styles.chipPrioridade]}
+              onPress={() => setPrioridade((atual) => !atual)}
             >
-              <Text style={[styles.chipTexto, status === 'feito' && styles.chipTextoAtivo]}>
-                {status === 'feito' ? '✓ Concluído' : 'Marcar como feito'}
-              </Text>
+              <Text style={styles.chipTexto}>⭐ Prioridade</Text>
             </Pressable>
-          )}
+
+            {!ehNovo && (
+              <Pressable
+                style={[styles.chip, status === 'feito' && styles.chipConcluido, styles.chipStatus]}
+                onPress={() => setStatus(status === 'feito' ? 'pendente' : 'feito')}
+              >
+                <Text style={[styles.chipTexto, status === 'feito' && styles.chipTextoAtivo]}>
+                  {status === 'feito' ? '✓ Concluído' : 'Marcar como feito'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
 
           <Pressable style={styles.botaoSalvar} onPress={salvar}>
             <Text style={styles.botaoSalvarTexto}>Salvar</Text>
@@ -391,6 +402,7 @@ const styles = StyleSheet.create({
   },
   chipAtivo: { backgroundColor: colors.urgentHoje, borderColor: colors.urgentHoje },
   chipConcluido: { backgroundColor: colors.done, borderColor: colors.done },
+  chipPrioridade: { backgroundColor: colors.prioritySoft, borderColor: colors.priority },
   chipStatus: { marginTop: 20, alignSelf: 'flex-start' },
   chipTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.textPrimary },
   chipTextoAtivo: { color: colors.white },
