@@ -9,6 +9,7 @@ import { gerarCodigoRecuperacao, normalizarCodigoRecuperacao } from '../crypto/c
 import { googleDisponivel, loginComGoogleNativo } from './googleSignIn';
 import { definirTokenAtual, obterTokenAtual } from './sessionToken';
 import { lerSessao, limparSessao, salvarSessao } from './tokenStorage';
+import { registrarTokenPush } from '../notifications/pushToken';
 
 export interface Usuario {
   id: string;
@@ -100,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(sessao.token);
           setUsuario(sessao.usuario);
           await verificarCriptografia(sessao.usuario.id);
+          registrarTokenPush();
         }
       })
       .catch(() => {})
@@ -117,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(sessao.token);
       setUsuario(sessao.usuario);
       await verificarCriptografia(sessao.usuario.id);
+      registrarTokenPush();
     },
     [verificarCriptografia],
   );

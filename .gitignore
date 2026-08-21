@@ -15,6 +15,12 @@ expo-env.d.ts
 # Segredos (chave de API do backend — veja src/sync/secrets.example.ts)
 src/sync/secrets.ts
 
+# Firebase (push notifications) — google-services.json é config do projeto,
+# a chave de conta de serviço (*firebase-adminsdk*.json) é credencial secreta.
+# Nenhum dos dois deve ir pro repositório.
+google-services.json
+*firebase-adminsdk*.json
+
 # Native
 .kotlin/
 *.orig.*

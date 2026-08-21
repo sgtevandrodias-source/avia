@@ -609,6 +609,45 @@ async function buscarCompartilhamentoPorId(db: D1Database, id: string): Promise<
   return row ?? null;
 }
 
+/**
+ * Notifica (best-effort) todos os aparelhos do destinatário sobre um convite
+ * de compartilhamento novo ou atualizado, via Expo Push API. Nunca lança —
+ * uma falha de push (token inválido, Expo fora do ar, etc.) não pode
+ * derrubar a resposta do compartilhamento em si. Sem credencial nenhuma
+ * aqui: quem precisa da credencial FCM é o serviço do Expo, configurado via
+ * EAS no lado do cliente, não este Worker.
+ */
+async function enviarPushCompartilhamento(
+  db: D1Database,
+  destinatarioId: string,
+  criadorNome: string,
+  tituloItem: string,
+  compartilhamentoId: string,
+): Promise<void> {
+  try {
+    const { results } = await db
+      .prepare('SELECT token FROM push_tokens WHERE usuario_id = ?')
+      .bind(destinatarioId)
+      .all<{ token: string }>();
+    if (results.length === 0) return;
+
+    const mensagens = results.map((r) => ({
+      to: r.token,
+      title: 'Novo compromisso compartilhado',
+      body: `${criadorNome} compartilhou "${tituloItem}" com você`,
+      data: { tipo: 'compartilhamento', compartilhamentoId },
+    }));
+
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(mensagens),
+    });
+  } catch {
+    // best-effort — quem compartilhou já recebeu {ok:true} de qualquer forma.
+  }
+}
+
 async function tratarCompartilhamentos(
   request: Request,
   env: Env,
@@ -706,7 +745,7 @@ async function tratarCompartilhamentos(
 
     const agora = new Date().toISOString();
     const novoId = crypto.randomUUID();
-    await env.DB.prepare(
+    const resultado = await env.DB.prepare(
       `INSERT INTO compartilhamentos (
         id, item_id, criador_id, criador_nome, destinatario_id, status,
         titulo, texto_original, data, hora_compromisso, hora_limite, tipo_horario,
@@ -726,7 +765,8 @@ async function tratarCompartilhamentos(
         categoria_cor = excluded.categoria_cor,
         notas = excluded.notas,
         excluido = 0,
-        atualizado_em = excluded.atualizado_em`,
+        atualizado_em = excluded.atualizado_em
+      RETURNING id`,
     )
       .bind(
         novoId,
@@ -747,7 +787,12 @@ async function tratarCompartilhamentos(
         agora,
         agora,
       )
-      .run();
+      .first<{ id: string }>();
+
+    // RETURNING id devolve o id de verdade da linha — numa atualização
+    // (ON CONFLICT), é o id ORIGINAL do compartilhamento, não o novoId
+    // gerado agora, então isso não pode vir de `novoId` direto.
+    await enviarPushCompartilhamento(env.DB, destinatario.id, criador?.nome ?? 'Alguém', titulo, resultado?.id ?? novoId);
 
     return json({ ok: true });
   }
@@ -889,6 +934,20 @@ async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota
          atualizado_em = excluded.atualizado_em`,
     )
       .bind(usuarioId, kdfIteracoes, saltSenha, dekCifradaPorSenha, saltRecuperacao, dekCifradaPorRecuperacao, agora, agora)
+      .run();
+    return json({ ok: true });
+  }
+
+  // Registra/atualiza o Expo Push Token deste aparelho (ver src/notifications/pushToken.ts).
+  // Chave é o token, não o usuario_id — um usuário pode ter vários aparelhos.
+  if (rota === 'push-token' && request.method === 'POST') {
+    const { token } = (await request.json()) as { token?: string };
+    if (!token) return json({ erro: 'token é obrigatório' }, 400);
+    await env.DB.prepare(
+      `INSERT INTO push_tokens (token, usuario_id, criado_em) VALUES (?, ?, ?)
+       ON CONFLICT(token) DO UPDATE SET usuario_id = excluded.usuario_id, criado_em = excluded.criado_em`,
+    )
+      .bind(token, usuarioId, new Date().toISOString())
       .run();
     return json({ ok: true });
   }
