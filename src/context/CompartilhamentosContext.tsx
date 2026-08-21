@@ -1,8 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import * as Notifications from 'expo-notifications';
 import * as db from '../db/database';
 import { obterTokenAtual } from '../auth/sessionToken';
 import { sincronizar } from '../sync/sync';
 import { API_URL } from '../sync/config';
+import { navegarPara } from '../navigation/navigationRef';
 import { useCategorias } from './CategoriasContext';
 import { tituloOuNotasBloqueados } from '../crypto/itemCriptografia';
 import { categoriaInfo, type Item, type ItemCompartilhadoLocal } from '../types/item';
@@ -58,6 +60,42 @@ export function CompartilhamentosProvider({ children }: { children: React.ReactN
     await sincronizar();
     await recarregar();
   }, [recarregar]);
+
+  // Notificação push de compartilhamento tocada (ver
+  // worker/src/index.ts enviarPushCompartilhamento). Dois casos, os dois
+  // precisam ser tratados: (1) app já estava aberto (foreground/background)
+  // — addNotificationResponseReceivedListener pega o toque ao vivo; (2) app
+  // estava fechado de vez — o toque que ABRIU o app aconteceu ANTES desse
+  // efeito rodar, então o listener nunca veria esse toque; por isso também
+  // confere getLastNotificationResponseAsync() uma vez no mount. Em ambos os
+  // casos: sincroniza de verdade (não só sincronizar() cru — sincronizarERecarregar
+  // também atualiza o estado React deste contexto, senão a tela Compartilhados
+  // só mostraria o convite depois de um remount, exatamente o bug relatado:
+  // "só depois que ela fechou e abriu o app que isso aconteceu") e navega.
+  useEffect(() => {
+    const tratarResposta = async (dados: Record<string, unknown> | undefined) => {
+      if (dados?.tipo !== 'compartilhamento') return;
+      await sincronizarERecarregar();
+      navegarPara('Compartilhados');
+    };
+
+    // getLastNotificationResponseAsync não existe no build web (lança
+    // UnavailabilityError) — .catch(() => null) evita um erro não tratado
+    // no console do PWA, onde essa checagem de cold-start nem faz sentido.
+    Notifications.getLastNotificationResponseAsync()
+      .catch(() => null)
+      .then((resposta) => {
+        if (resposta) {
+          tratarResposta(resposta.notification.request.content.data);
+          Notifications.clearLastNotificationResponseAsync().catch(() => {});
+        }
+      });
+
+    const assinatura = Notifications.addNotificationResponseReceivedListener((resposta) => {
+      tratarResposta(resposta.notification.request.content.data);
+    });
+    return () => assinatura.remove();
+  }, [sincronizarERecarregar]);
 
   const enviados = useMemo(() => itensCompartilhados.filter((c) => c.papel === 'enviado'), [itensCompartilhados]);
   const recebidos = useMemo(() => itensCompartilhados.filter((c) => c.papel === 'recebido'), [itensCompartilhados]);
