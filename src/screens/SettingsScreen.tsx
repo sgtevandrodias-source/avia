@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
+import { obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/typography';
 import { avisar, confirmar } from '../utils/confirm';
@@ -15,6 +18,18 @@ export function SettingsScreen() {
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [salvandoSenha, setSalvandoSenha] = useState(false);
+  const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
+
+  const atualizarStatusSync = useCallback(() => {
+    obterStatusSincronizacao().then(setStatusSync);
+  }, []);
+
+  // Lê o status já salvo ao abrir a tela, e de novo assim que "sincronizando"
+  // volta pra false (ou seja, um ciclo de sincronizarAgora() acabou de
+  // terminar, disparado por essa tela ou por qualquer outro lugar do app).
+  useEffect(() => {
+    atualizarStatusSync();
+  }, [atualizarStatusSync, sincronizando]);
 
   const confirmarLogout = () => {
     confirmar('Sair', 'Tem certeza que deseja sair da sua conta?', () => logout());
@@ -126,6 +141,13 @@ export function SettingsScreen() {
           <Text style={styles.syncTexto}>🔄 Sincronizar agora</Text>
         )}
       </Pressable>
+      {!sincronizando && statusSync && (
+        <Text style={[styles.textoStatusSync, !statusSync.ok && styles.textoStatusSyncErro]}>
+          {statusSync.ok
+            ? `Sincronizado há ${formatDistanceToNow(new Date(statusSync.quando), { locale: ptBR })}`
+            : 'Não foi possível sincronizar — tentaremos de novo em breve'}
+        </Text>
+      )}
     </SafeAreaView>
   );
 }
@@ -191,6 +213,17 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     fontSize: 14,
     color: colors.textPrimary,
+  },
+  textoStatusSync: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+    marginHorizontal: 16,
+  },
+  textoStatusSyncErro: {
+    color: colors.danger,
   },
   input: {
     fontFamily: fonts.regular,

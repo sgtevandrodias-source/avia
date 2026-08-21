@@ -95,10 +95,21 @@ export async function listarExclusoesPendentes(): Promise<string[]> {
   return [];
 }
 export async function removerExclusaoPendente(): Promise<void> {}
-export async function getMeta(): Promise<string | null> {
-  return null;
+
+// Diferente dos outros stubs acima: getMeta/setMeta usam localStorage de
+// verdade (não são só cursor de sync incremental — servem também pra
+// guardar preferências/estado simples, ex. status da última sincronização
+// em SettingsScreen). Um valor real aqui não muda o comportamento do pull
+// (o web sempre busca a lista inteira e decifra na hora, ver listarItens),
+// só evita que esse dado se perca a cada recarregamento de página.
+const PREFIXO_META = 'avia_meta_';
+
+export async function getMeta(chave: string): Promise<string | null> {
+  return localStorage.getItem(PREFIXO_META + chave);
 }
-export async function setMeta(): Promise<void> {}
+export async function setMeta(chave: string, valor: string): Promise<void> {
+  localStorage.setItem(PREFIXO_META + chave, valor);
+}
 
 // ---- Categorias (Fase 3) ----
 

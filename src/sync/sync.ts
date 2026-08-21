@@ -8,7 +8,18 @@ import type { CategoriaItem, Item } from '../types/item';
 const CHAVE_ULTIMA_SYNC = 'ultimaSincronizacao';
 const CHAVE_ULTIMA_SYNC_CATEGORIAS = 'ultimaSincronizacaoCategorias';
 const CHAVE_ULTIMO_USUARIO = 'ultimoUsuarioId';
+const CHAVE_STATUS_SYNC = 'statusUltimaSincronizacao';
 const TIMEOUT_MS = 8000;
+
+export interface StatusSincronizacao {
+  quando: string; // ISO — relógio do próprio aparelho; só usado pra exibir "há quanto tempo", nunca comparado com timestamps do servidor.
+  ok: boolean;
+}
+
+export async function obterStatusSincronizacao(): Promise<StatusSincronizacao | null> {
+  const valor = await db.getMeta(CHAVE_STATUS_SYNC);
+  return valor ? (JSON.parse(valor) as StatusSincronizacao) : null;
+}
 
 interface ItemRemoto extends Item {
   excluido?: boolean;
@@ -152,8 +163,10 @@ export async function sincronizar(): Promise<{ ok: boolean }> {
     if (servidorEm) {
       await db.setMeta(CHAVE_ULTIMA_SYNC, servidorEm);
     }
+    await db.setMeta(CHAVE_STATUS_SYNC, JSON.stringify({ quando: new Date().toISOString(), ok: true }));
     return { ok: true };
   } catch {
+    await db.setMeta(CHAVE_STATUS_SYNC, JSON.stringify({ quando: new Date().toISOString(), ok: false }));
     return { ok: false };
   }
 }
