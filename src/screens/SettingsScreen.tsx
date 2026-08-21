@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import Constants from 'expo-constants';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
@@ -148,6 +149,12 @@ export function SettingsScreen() {
             : 'Não foi possível sincronizar — tentaremos de novo em breve'}
         </Text>
       )}
+
+      <Text style={styles.secao}>Sobre</Text>
+      <View style={styles.cartaoSenha}>
+        <Text style={styles.textoAjudaSenha}>Desenvolvido por Evandro Dias</Text>
+        <Text style={styles.textoVersao}>Versão {Constants.expoConfig?.version ?? '—'}</Text>
+      </View>
     </SafeAreaView>
   );
 }
@@ -224,6 +231,11 @@ const styles = StyleSheet.create({
   },
   textoStatusSyncErro: {
     color: colors.danger,
+  },
+  textoVersao: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
   },
   input: {
     fontFamily: fonts.regular,
