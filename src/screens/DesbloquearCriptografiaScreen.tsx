@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { avisar } from '../utils/confirm';
 
 export function DesbloquearCriptografiaScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const navigation = useNavigation<any>();
   const { desbloquearCriptografia } = useAuth();
   const { sincronizarAgora } = useItems();
@@ -65,7 +68,8 @@ export function DesbloquearCriptografiaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: 20, paddingBottom: 40 },
   titulo: { fontFamily: fonts.extraBold, fontSize: 20, color: colors.textPrimary, marginBottom: 12 },
@@ -98,4 +102,5 @@ const styles = StyleSheet.create({
   botaoPrimarioTexto: { fontFamily: fonts.bold, fontSize: 15, color: colors.white },
   botaoCancelar: { marginTop: 14, alignItems: 'center', paddingVertical: 10 },
   botaoCancelarTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
-});
+  });
+}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,7 +21,8 @@ import { useCategorias } from '../context/CategoriasContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { campoOuBloqueado, tituloOuNotasBloqueados } from '../crypto/itemCriptografia';
 import { SeletorHora } from '../components/SeletorHora';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import {
   NOTAS_TAMANHO_MAXIMO,
@@ -63,6 +64,8 @@ function ChipCategoria({
   selecionada: boolean;
   onPress: (id: string) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   return (
     <Pressable
       style={[styles.chip, selecionada && { backgroundColor: cat.cor }]}
@@ -83,6 +86,8 @@ function ChipCategoria({
  * só dá pra ver os campos e remover da própria agenda.
  */
 function ItemCompartilhadoDetalhe({ item }: { item: Item }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const navigation = useNavigation<any>();
   const { removerCompartilhamento } = useCompartilhamentos();
 
@@ -162,6 +167,8 @@ export function ItemDetailScreen() {
 }
 
 function ItemFormularioDetalhe() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { itens, adicionarItem, editarItem, removerItem } = useItems();
@@ -550,7 +557,8 @@ function ItemFormularioDetalhe() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: 16, paddingBottom: 40 },
   label: {
@@ -686,4 +694,5 @@ const styles = StyleSheet.create({
   },
   botaoCancelarModal: { marginTop: 10, alignItems: 'center', paddingVertical: 8 },
   botaoCancelarModalTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
-});
+  });
+}

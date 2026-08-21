@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export function ProgressoDoDia({ feitos, total }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const progresso = useRef(new Animated.Value(0)).current;
   const proporcao = total > 0 ? feitos / total : 0;
 
@@ -47,7 +50,8 @@ export function ProgressoDoDia({ feitos, total }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   wrapper: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -79,4 +83,5 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.done,
   },
-});
+  });
+}

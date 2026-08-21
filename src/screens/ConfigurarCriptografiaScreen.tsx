@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import * as db from '../db/database';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { avisar } from '../utils/confirm';
 
@@ -14,6 +15,8 @@ const TAMANHO_MINIMO_SENHA = 8;
 type Passo = 'senha' | 'recuperacao' | 'concluido';
 
 export function ConfigurarCriptografiaScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const navigation = useNavigation<any>();
   const { configurarCriptografia } = useAuth();
   const { sincronizarAgora } = useItems();
@@ -179,7 +182,8 @@ export function ConfigurarCriptografiaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: 20, paddingBottom: 40 },
   titulo: { fontFamily: fonts.extraBold, fontSize: 20, color: colors.textPrimary, marginBottom: 12 },
@@ -246,4 +250,5 @@ const styles = StyleSheet.create({
   caixaSelecao: { fontSize: 20, color: colors.textPrimary },
   textoConfirmacao: { fontFamily: fonts.regular, fontSize: 14, color: colors.textPrimary, flex: 1 },
   spinner: { marginTop: 24 },
-});
+  });
+}

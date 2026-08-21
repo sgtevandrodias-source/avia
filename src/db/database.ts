@@ -1,8 +1,76 @@
 import * as SQLite from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { CategoriaItem, Item, ItemCompartilhadoLocal, NovaCategoria, NovoItem } from '../types/item';
 
+// Cada conta salva neste aparelho tem seu PRÓPRIO arquivo SQLite
+// (avia_<usuarioId>.db) — nunca compartilham dados, nem por um instante,
+// o que torna a troca de conta instantânea e funcional offline (só dispara
+// uma sincronização de atualização em segundo plano depois, ver
+// alternarConta em AuthContext.tsx). `definirUsuarioAtivo` precisa ser
+// chamado (pelo AuthContext, ao restaurar sessão/logar/trocar de conta)
+// antes de qualquer outra função deste módulo ser usada.
+let usuarioAtivoId: string | null = null;
+let dbAtual: SQLite.SQLiteDatabase | null = null;
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+/**
+ * Quem já usava o AVIA antes desta versão tinha um único arquivo fixo
+ * (avia.db, compartilhado por qualquer conta logada no aparelho). Na
+ * primeira vez que essa conta específica for ativada depois desta
+ * atualização, renomeia esse arquivo único pro nome por-conta dela, uma
+ * única vez — preserva o cache/fila pendente de quem já usa o app, em vez
+ * de forçar uma ressincronização completa à toa. Falha aqui nunca é grave:
+ * na pior hipótese esta conta só começa com cache vazio e resincroniza do
+ * zero (ver sincronizar() em sync.ts) — o arquivo antigo nunca é apagado
+ * por essa função, só movido, então não há risco de perda de dado.
+ */
+async function migrarBancoUnicoSeNecessario(usuarioId: string): Promise<void> {
+  try {
+    const antigo = `${SQLite.defaultDatabaseDirectory}avia.db`;
+    const novo = `${SQLite.defaultDatabaseDirectory}avia_${usuarioId}.db`;
+    const [infoAntigo, infoNovo] = await Promise.all([
+      FileSystem.getInfoAsync(antigo),
+      FileSystem.getInfoAsync(novo),
+    ]);
+    if (infoAntigo.exists && !infoNovo.exists) {
+      await FileSystem.moveAsync({ from: antigo, to: novo });
+    }
+  } catch {
+    // Ver comentário acima — nunca bloqueia a abertura do banco por-conta.
+  }
+}
+
+/** Troca qual conta está ativa — chamado pelo AuthContext antes de qualquer leitura/escrita local. */
+export function definirUsuarioAtivo(usuarioId: string): void {
+  if (usuarioId === usuarioAtivoId) return;
+  usuarioAtivoId = usuarioId;
+  const paraFechar = dbAtual;
+  dbAtual = null;
+  dbPromise = null;
+  if (paraFechar) {
+    paraFechar.closeAsync().catch(() => {});
+  }
+}
+
+/** Apaga de vez o cache local de uma conta específica (usado ao "remover conta deste aparelho"). */
+export async function apagarBancoDaConta(usuarioId: string): Promise<void> {
+  // Precisa fechar a conexão ANTES de apagar o arquivo, senão a exclusão
+  // pode falhar com o arquivo ainda aberto — por isso aqui fecha e espera
+  // de verdade, em vez do fire-and-forget de definirUsuarioAtivo.
+  if (usuarioId === usuarioAtivoId) {
+    if (dbAtual) await dbAtual.closeAsync().catch(() => {});
+    dbAtual = null;
+    dbPromise = null;
+    usuarioAtivoId = null;
+  }
+  try {
+    await SQLite.deleteDatabaseAsync(`avia_${usuarioId}.db`);
+  } catch {
+    // Aparelho pode nunca ter tido esse arquivo (conta só existiu em outro
+    // aparelho) — nada a fazer.
+  }
+}
 
 async function adicionarColunaSeNaoExistir(
   db: SQLite.SQLiteDatabase,
@@ -17,8 +85,15 @@ async function adicionarColunaSeNaoExistir(
 }
 
 function getDb(): Promise<SQLite.SQLiteDatabase> {
+  if (!usuarioAtivoId) {
+    throw new Error('definirUsuarioAtivo precisa ser chamado antes de usar o banco local');
+  }
   if (!dbPromise) {
-    dbPromise = SQLite.openDatabaseAsync('avia.db').then(async (db) => {
+    const usuarioId = usuarioAtivoId;
+    dbPromise = migrarBancoUnicoSeNecessario(usuarioId)
+      .then(() => SQLite.openDatabaseAsync(`avia_${usuarioId}.db`))
+      .then(async (db) => {
+      dbAtual = db;
       await db.execAsync(`
         CREATE TABLE IF NOT EXISTS items (
           id TEXT PRIMARY KEY NOT NULL,

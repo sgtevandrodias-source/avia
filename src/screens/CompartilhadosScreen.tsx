@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ActivityIndicator, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { format, parseISO } from 'date-fns';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import type { ItemCompartilhadoLocal } from '../types/item';
 
@@ -17,6 +18,8 @@ const LABEL_STATUS: Record<ItemCompartilhadoLocal['status'], string> = {
 };
 
 function LinhaRecebido({ item }: { item: ItemCompartilhadoLocal }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { responderCompartilhamento } = useCompartilhamentos();
   const [respondendo, setRespondendo] = React.useState(false);
 
@@ -60,6 +63,8 @@ function LinhaRecebido({ item }: { item: ItemCompartilhadoLocal }) {
 }
 
 function LinhaEnviado({ item }: { item: ItemCompartilhadoLocal }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   return (
     <View style={styles.linha}>
       <View style={styles.linhaInfo}>
@@ -74,6 +79,8 @@ function LinhaEnviado({ item }: { item: ItemCompartilhadoLocal }) {
 }
 
 export function CompartilhadosScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { enviados, recebidos, carregando } = useCompartilhamentos();
 
   const secoes = [
@@ -103,7 +110,8 @@ export function CompartilhadosScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   lista: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 },
   secaoTitulo: {
@@ -163,4 +171,5 @@ const styles = StyleSheet.create({
   tagPendente: { backgroundColor: colors.prioritySoft, color: colors.textPrimary },
   tagAceito: { backgroundColor: colors.doneSoft, color: colors.done },
   tagRecusado: { backgroundColor: colors.background, color: colors.textMuted },
-});
+  });
+}

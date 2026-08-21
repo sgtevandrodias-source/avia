@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
@@ -8,7 +8,8 @@ import { useCategorias } from '../context/CategoriasContext';
 import { useItems } from '../context/ItemsContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { campoOuBloqueado } from '../crypto/itemCriptografia';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { dataHoraLimiteDoItem } from '../utils/periodos';
 import { confirmar } from '../utils/confirm';
@@ -22,6 +23,8 @@ interface Props {
 }
 
 export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { alternarPrioridade, removerItem } = useItems();
   const { alternarConclusaoCompartilhado, removerCompartilhamento } = useCompartilhamentos();
   const titulo = campoOuBloqueado(item.titulo) ?? item.titulo;
@@ -131,7 +134,8 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -198,4 +202,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
   },
-});
+  });
+}

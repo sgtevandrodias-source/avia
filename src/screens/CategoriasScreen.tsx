@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import type { CategoriaItem } from '../types/item';
 import { avisar, confirmar } from '../utils/confirm';
@@ -26,6 +27,8 @@ interface EditorEstado {
 }
 
 export function CategoriasScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { categorias, adicionarCategoria, editarCategoria, removerCategoria } = useCategorias();
   const { itens, editarItem } = useItems();
   const [editor, setEditor] = useState<EditorEstado | null>(null);
@@ -134,7 +137,8 @@ export function CategoriasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   linhaSecaoComBotao: {
     flexDirection: 'row',
@@ -222,4 +226,5 @@ const styles = StyleSheet.create({
   botaoExcluirTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger },
   botaoCancelar: { marginTop: 4, alignItems: 'center', paddingVertical: 8 },
   botaoCancelarTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
-});
+  });
+}

@@ -8,7 +8,6 @@ import type { CategoriaItem, Item, ItemCompartilhadoLocal } from '../types/item'
 const CHAVE_ULTIMA_SYNC = 'ultimaSincronizacao';
 const CHAVE_ULTIMA_SYNC_CATEGORIAS = 'ultimaSincronizacaoCategorias';
 const CHAVE_ULTIMA_SYNC_COMPARTILHAMENTOS = 'ultimaSincronizacaoCompartilhamentos';
-const CHAVE_ULTIMO_USUARIO = 'ultimoUsuarioId';
 const CHAVE_STATUS_SYNC = 'statusUltimaSincronizacao';
 const TIMEOUT_MS = 8000;
 
@@ -239,19 +238,32 @@ export async function forcarResyncCompleto(): Promise<void> {
 }
 
 /**
- * Prepara o SQLite local pra uma sessão que acabou de logar. O aparelho
- * pode ter dados de OUTRA conta salvos localmente (login/logout entre
- * contas diferentes no mesmo aparelho) — se o usuário mudou desde a
- * última vez, apaga tudo antes de puxar os dados da conta atual, senão
- * os dois usuários veriam os itens um do outro misturados.
+ * Prepara o SQLite local pra uma sessão que acabou de logar (login/cadastro
+ * novo, não troca entre contas já salvas — ver alternarConta em
+ * AuthContext.tsx, que usa o cursor incremental já existente da conta em
+ * vez de forçar tudo de novo). Cada conta tem seu próprio arquivo local
+ * (ver definirUsuarioAtivo em database.ts), então não há risco de misturar
+ * dados de contas diferentes — só troca qual arquivo está ativo e força um
+ * pull/push completo, já que essa sessão pode ser novidade neste aparelho.
  */
 export async function prepararSessaoParaUsuario(usuarioId: string): Promise<void> {
-  const ultimoUsuario = await db.getMeta(CHAVE_ULTIMO_USUARIO);
-  if (ultimoUsuario && ultimoUsuario !== usuarioId) {
-    await db.limparTudoLocal();
-  }
-  await db.setMeta(CHAVE_ULTIMO_USUARIO, usuarioId);
+  db.definirUsuarioAtivo(usuarioId);
   await forcarResyncCompleto();
+}
+
+/**
+ * Troca pra outra conta JÁ salva neste aparelho (ver alternarConta em
+ * AuthContext.tsx) — ao contrário de prepararSessaoParaUsuario, não força
+ * um resync completo: essa conta já tem seu próprio arquivo local com um
+ * cursor incremental válido (ver definirUsuarioAtivo em database.ts), então
+ * um sincronizar() normal já basta pra pegar só o que mudou desde a última
+ * vez que ela esteve ativa neste aparelho — é isso que torna a troca rápida
+ * mesmo com rede lenta (a tela já mostra o cache local na hora, e o
+ * sincronizar() só complementa em segundo plano).
+ */
+export async function alternarSessaoParaUsuario(usuarioId: string): Promise<void> {
+  db.definirUsuarioAtivo(usuarioId);
+  await sincronizar();
 }
 
 /**

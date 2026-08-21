@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 
 const HORARIOS: string[] = [];
@@ -20,6 +21,8 @@ interface Props {
 }
 
 export function SeletorHora({ visivel, valorAtual, onSelecionar, onFechar }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const listRef = useRef<FlatList<string>>(null);
 
   useEffect(() => {
@@ -63,7 +66,8 @@ export function SeletorHora({ visivel, valorAtual, onSelecionar, onFechar }: Pro
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   folha: {
     backgroundColor: colors.surface,
@@ -79,4 +83,5 @@ const styles = StyleSheet.create({
   itemAtivo: { backgroundColor: colors.urgentHoje },
   itemTexto: { fontFamily: fonts.medium, fontSize: 16, color: colors.textPrimary },
   itemTextoAtivo: { color: colors.white, fontFamily: fonts.bold },
-});
+  });
+}

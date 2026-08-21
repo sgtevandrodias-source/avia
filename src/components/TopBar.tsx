@@ -6,7 +6,8 @@ import { ItemCard } from './ItemCard';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { abrirDrawer } from '../navigation/navigationRef';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import type { Item } from '../types/item';
 
@@ -74,7 +75,10 @@ function useSaudacaoAjustada(texto: string) {
   };
 }
 
-export function TopBar({ titulo, saudacao, cor = colors.border }: Props) {
+export function TopBar({ titulo, saudacao, cor }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
+  const corResolvida = cor ?? colors.border;
   const navigation = useNavigation<any>();
   const { usuario } = useAuth();
   const { itens, alternarStatus } = useItems();
@@ -103,7 +107,7 @@ export function TopBar({ titulo, saudacao, cor = colors.border }: Props) {
   };
 
   return (
-    <View style={[styles.header, { borderBottomColor: cor }]}>
+    <View style={[styles.header, { borderBottomColor: corResolvida }]}>
       <View style={styles.linha}>
         <Pressable
           onPress={abrirDrawer}
@@ -190,7 +194,8 @@ export function TopBar({ titulo, saudacao, cor = colors.border }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -265,4 +270,5 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     textAlign: 'center',
   },
-});
+  });
+}

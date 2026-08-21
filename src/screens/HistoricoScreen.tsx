@@ -5,7 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ItemCard } from '../components/ItemCard';
 import { useItems } from '../context/ItemsContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { itensConcluidosOrdenados } from '../utils/periodos';
 import type { Item } from '../types/item';
@@ -18,6 +19,8 @@ function labelDoDia(dataIso: string): string {
 }
 
 export function HistoricoScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { itens, alternarStatus } = useItems();
   const navigation = useNavigation<any>();
 
@@ -58,7 +61,8 @@ export function HistoricoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
   headerTitulo: { fontFamily: fonts.extraBold, fontSize: 24, color: colors.textPrimary },
@@ -73,4 +77,5 @@ const styles = StyleSheet.create({
   },
   vazio: { paddingTop: 60, alignItems: 'center' },
   vazioTexto: { fontFamily: fonts.medium, fontSize: 14, color: colors.textMuted },
-});
+  });
+}

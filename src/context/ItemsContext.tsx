@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as db from '../db/database';
+import { useAuth } from '../auth/AuthContext';
 import { useCategorias } from './CategoriasContext';
 import {
   agendarNotificacaoDoItem,
@@ -32,6 +33,7 @@ interface ItemsContextValue {
 const ItemsContext = createContext<ItemsContextValue | null>(null);
 
 export function ItemsProvider({ children }: { children: React.ReactNode }) {
+  const { usuario } = useAuth();
   const [itens, setItens] = useState<Item[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
@@ -85,6 +87,11 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [recarregar, recarregarCategorias]);
 
+  // Reage a `usuario?.id` além de rodar no mount: cobre tanto a carga
+  // inicial quanto a troca pra outra conta salva neste aparelho (ver
+  // alternarConta em AuthContext.tsx) — sem isso, trocar de conta trocaria
+  // o arquivo SQLite ativo mas deixaria a tela mostrando os itens da conta
+  // anterior até o próximo poll automático (até 20s depois).
   useEffect(() => {
     recarregar()
       .finally(() => setCarregando(false))
@@ -98,7 +105,7 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
         const todos = await db.listarItens();
         await reconciliarNotificacoes(todos.filter((i) => i.status === 'pendente'));
       });
-  }, [recarregar, sincronizarAgora]);
+  }, [recarregar, sincronizarAgora, usuario?.id]);
 
   // Recarrega ao voltar do background — pode ter chegado sincronização de
   // outro aparelho enquanto o app estava em segundo plano.

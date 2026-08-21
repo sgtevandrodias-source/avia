@@ -1,24 +1,39 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Constants from 'expo-constants';
+import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../auth/AuthContext';
+import { Avatar } from '../components/Avatar';
 import { useItems } from '../context/ItemsContext';
 import { obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
-import { colors } from '../theme/colors';
+import { useTheme, type PreferenciaTema } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { avisar, confirmar } from '../utils/confirm';
 
+const CHAVE_PIX = 'ee48f134-99b4-4232-ac32-9a1b14f474a0';
+const EMAIL_CONTATO = 'edsideasfactory@gmail.com';
+
+const OPCOES_TEMA: { valor: PreferenciaTema; label: string }[] = [
+  { valor: 'claro', label: 'Claro' },
+  { valor: 'escuro', label: 'Escuro' },
+  { valor: 'sistema', label: 'Automático' },
+];
+
 export function SettingsScreen() {
+  const { colors, preferencia, definirPreferencia } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const navigation = useNavigation<any>();
   const { sincronizando, sincronizarAgora } = useItems();
-  const { usuario, logout, definirSenha, criptografiaConfigurada, criptografiaBloqueada } = useAuth();
+  const { usuario, contas, logout, definirSenha, criptografiaConfigurada, criptografiaBloqueada } = useAuth();
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [salvandoSenha, setSalvandoSenha] = useState(false);
+  const [pixCopiado, setPixCopiado] = useState(false);
   const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
 
   const atualizarStatusSync = useCallback(() => {
@@ -32,8 +47,22 @@ export function SettingsScreen() {
     atualizarStatusSync();
   }, [atualizarStatusSync, sincronizando]);
 
+  const outrasContasSalvas = contas.length > 1;
+
+  const copiarChavePix = async () => {
+    await Clipboard.setStringAsync(CHAVE_PIX);
+    setPixCopiado(true);
+    setTimeout(() => setPixCopiado(false), 2000);
+  };
+
   const confirmarLogout = () => {
-    confirmar('Sair', 'Tem certeza que deseja sair da sua conta?', () => logout());
+    confirmar(
+      outrasContasSalvas ? 'Sair desta conta' : 'Sair',
+      outrasContasSalvas
+        ? 'Vai remover essa conta deste aparelho — as outras salvas continuam disponíveis. Continuar?'
+        : 'Tem certeza que deseja sair da sua conta?',
+      () => logout(),
+    );
   };
 
   const salvarSenha = async () => {
@@ -62,14 +91,22 @@ export function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <Text style={styles.secao}>Conta</Text>
       <View style={styles.linhaConta}>
-        <View>
-          <Text style={styles.contaNome}>{usuario?.nome}</Text>
-          <Text style={styles.contaEmail}>{usuario?.email}</Text>
+        <View style={styles.linhaContaComAvatar}>
+          {usuario && (
+            <Avatar nome={usuario.nome} email={usuario.email} fotoUrl={usuario.fotoUrl} tamanho={44} />
+          )}
+          <View>
+            <Text style={styles.contaNome}>{usuario?.nome}</Text>
+            <Text style={styles.contaEmail}>{usuario?.email}</Text>
+          </View>
         </View>
         <Pressable onPress={confirmarLogout}>
-          <Text style={styles.linkSair}>Sair</Text>
+          <Text style={styles.linkSair}>{outrasContasSalvas ? 'Sair desta conta' : 'Sair'}</Text>
         </Pressable>
       </View>
+      <Pressable style={styles.linkTrocarConta} onPress={() => navigation.navigate('Contas')}>
+        <Text style={styles.linkTrocarContaTexto}>Trocar ou adicionar conta neste aparelho</Text>
+      </Pressable>
 
       <Text style={styles.secao}>Definir senha</Text>
       <View style={styles.cartaoSenha}>
@@ -150,16 +187,66 @@ export function SettingsScreen() {
         </Text>
       )}
 
+      <Text style={styles.secao}>Aparência</Text>
+      <View style={styles.linhaTema}>
+        {OPCOES_TEMA.map((opcao) => {
+          const ativo = preferencia === opcao.valor;
+          return (
+            <Pressable
+              key={opcao.valor}
+              style={[styles.botaoTema, ativo && styles.botaoTemaAtivo]}
+              onPress={() => definirPreferencia(opcao.valor)}
+            >
+              <Text style={[styles.botaoTemaTexto, ativo && styles.botaoTemaTextoAtivo]}>{opcao.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <Text style={styles.secao}>Sobre</Text>
       <View style={styles.cartaoSenha}>
-        <Text style={styles.textoAjudaSenha}>Desenvolvido por Evandro Dias</Text>
+        <Text style={styles.textoSobre}>
+          E o que que isso tem a ver com um aplicativo de produtividade? Bom, sendo uma pessoa muito atarefada,
+          muitas vezes me peguei anotando coisas no papel, na agenda do Google, na agenda física. No dia a dia do
+          trabalho e dos afazeres domésticos, eu ficava perdido em meio a tantas coisas pra fazer. Foi assim que
+          eu disse pra mim mesmo: &quot;Avia, Evandro! Resolva isso!&quot; Assim nasceu a ideia desse app: um app
+          que resolve.
+        </Text>
+        <Text style={styles.textoSobre}>
+          Resolve porque junta tudo num lugar só — compromissos, prazos, tarefas de casa e do trabalho — sem
+          depender de papel, de outro app de agenda ou da sua memória. Resolve porque você fala ou digita
+          rapidinho o que precisa fazer, e o Avia organiza pra você: separa o que é urgente, o que pode esperar,
+          o que já passou da hora. Resolve porque avisa antes de você esquecer, não depois. E resolve porque,
+          quando alguém mais também precisa saber de um compromisso ou lembrete, dá pra compartilhar na hora —
+          sem duplicar anotação, sem mensagem que se perde na conversa.
+        </Text>
+        <Text style={styles.textoSobre}>
+          No fim das contas, o Avia é o &quot;resolve&quot; que eu queria pra mim. Espero que resolva pra você
+          também.
+        </Text>
+        <Text style={[styles.textoSobre, styles.textoSobreApoio]}>
+          Se você gostou, use à vontade. Se achou útil e quiser colaborar com a manutenção do app, fique à
+          vontade pra contribuir com um Pix de qualquer valor. Ou só me manda um feedback sobre o que posso
+          fazer pra melhorar o app.
+        </Text>
+
+        <Pressable style={styles.linhaPix} onPress={copiarChavePix}>
+          <View style={styles.linhaPixInfo}>
+            <Text style={styles.labelPix}>Chave Pix</Text>
+            <Text style={styles.valorPix}>{CHAVE_PIX}</Text>
+          </View>
+          <Text style={styles.linkCopiarPix}>{pixCopiado ? 'Copiado!' : 'Copiar'}</Text>
+        </Pressable>
+        <Text style={styles.textoContato}>Feedback: {EMAIL_CONTATO}</Text>
+
         <Text style={styles.textoVersao}>Versão {Constants.expoConfig?.version ?? '—'}</Text>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   secao: {
     fontFamily: fonts.bold,
@@ -181,9 +268,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  linhaContaComAvatar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   contaNome: { fontFamily: fonts.bold, fontSize: 14, color: colors.textPrimary },
   contaEmail: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   linkSair: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger },
+  linkTrocarConta: { marginHorizontal: 16, marginTop: 8, paddingVertical: 4 },
+  linkTrocarContaTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.urgentHoje },
   cartaoSenha: {
     marginHorizontal: 16,
     backgroundColor: colors.surface,
@@ -236,6 +326,52 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.textMuted,
+    marginTop: 12,
+  },
+  textoSobre: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  textoSobreApoio: {
+    marginTop: 4,
+  },
+  linhaPix: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 4,
+  },
+  linhaPixInfo: { flex: 1 },
+  labelPix: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  valorPix: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textPrimary,
+    marginTop: 2,
+  },
+  linkCopiarPix: {
+    fontFamily: fonts.bold,
+    fontSize: 13,
+    color: colors.urgentHoje,
+    marginLeft: 12,
+  },
+  textoContato: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 10,
   },
   input: {
     fontFamily: fonts.regular,
@@ -248,4 +384,32 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     color: colors.textPrimary,
   },
-});
+  linhaTema: {
+    flexDirection: 'row',
+    gap: 8,
+    marginHorizontal: 16,
+  },
+  botaoTema: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  botaoTemaAtivo: {
+    backgroundColor: colors.urgentHoje,
+    borderColor: colors.urgentHoje,
+  },
+  botaoTemaTexto: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  botaoTemaTextoAtivo: {
+    fontFamily: fonts.bold,
+    color: colors.white,
+  },
+  });
+}

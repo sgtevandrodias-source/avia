@@ -7,7 +7,8 @@ import { ProgressoDoDia } from '../components/ProgressoDoDia';
 import { useItems } from '../context/ItemsContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { itemDeCompartilhamento } from '../utils/compartilhamentos';
-import { colors, corPorPeriodo, type PeriodoKey } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta, PeriodoKey } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import {
   itensConcluidosDoPeriodo,
@@ -24,6 +25,8 @@ interface Props {
 }
 
 export function PeriodoScreen({ periodo }: Props) {
+  const { colors, corPorPeriodo } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { itens, alternarStatus } = useItems();
   const { recebidos } = useCompartilhamentos();
   const navigation = useNavigation<any>();
@@ -78,7 +81,8 @@ export function PeriodoScreen({ periodo }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -97,4 +101,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
   },
-});
+  });
+}

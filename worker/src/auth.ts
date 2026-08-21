@@ -141,6 +141,7 @@ export interface GoogleIdTokenPayload {
   sub: string;
   email: string;
   name: string;
+  picture?: string;
   aud: string;
   iss: string;
   exp: number;

@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 
 interface Props {
   concluido: boolean;
@@ -10,6 +11,8 @@ interface Props {
 }
 
 export function CheckboxConcluir({ concluido, corPendente, onToggle }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const escala = useRef(new Animated.Value(concluido ? 1 : 0)).current;
   const escalaAnel = useRef(new Animated.Value(0)).current;
   const opacidadeAnel = useRef(new Animated.Value(0)).current;
@@ -72,7 +75,8 @@ export function CheckboxConcluir({ concluido, corPendente, onToggle }: Props) {
 
 const TAMANHO = 26;
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   wrapper: {
     width: TAMANHO,
     height: TAMANHO,
@@ -111,4 +115,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.done,
   },
-});
+  });
+}

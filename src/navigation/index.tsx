@@ -17,27 +17,37 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
 import { ConfigurarCriptografiaScreen } from '../screens/ConfigurarCriptografiaScreen';
 import { DesbloquearCriptografiaScreen } from '../screens/DesbloquearCriptografiaScreen';
+import { ContasScreen } from '../screens/ContasScreen';
+import { AdicionarContaScreen } from '../screens/AdicionarContaScreen';
 import { CriptografiaAvisos } from '../components/CriptografiaAvisos';
+import { Avatar } from '../components/Avatar';
+import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
-import { colors, corPorPeriodo, corPorPeriodoSoft } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta, PeriodoKey } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { itensAtrasados } from '../utils/periodos';
 
 // Configuração do TopBar por rota do Drawer — usada pra renderizar UM único
 // TopBar compartilhado (ver DrawerNavigator abaixo), já que ele agora
 // precisa ficar ACIMA da CapturaRapida em toda tela (melhoria de UI pedida),
-// e não mais dentro de cada tela individualmente.
-const CONFIG_TOPBAR: Record<string, { titulo: string; saudacao?: boolean; cor?: string }> = {
-  Hoje: { titulo: 'Hoje', saudacao: true, cor: corPorPeriodo.hoje },
-  Amanha: { titulo: 'Amanhã', cor: corPorPeriodo.amanha },
-  Calendario: { titulo: 'Calendário' },
-  Atrasados: { titulo: 'Atrasados' },
-  Historico: { titulo: 'Feitos' },
-  Categorias: { titulo: 'Categorias' },
-  Compartilhados: { titulo: 'Compartilhados' },
-  Config: { titulo: 'Configurações' },
-};
+// e não mais dentro de cada tela individualmente. As cores de "hoje"/"amanhã"
+// dependem do tema ativo — por isso essa config vira uma função chamada
+// dentro do componente (useTheme() só pode ser lido lá), não mais um objeto
+// fixo no escopo do módulo.
+function configTopBar(corPorPeriodo: Record<PeriodoKey, string>): Record<string, { titulo: string; saudacao?: boolean; cor?: string }> {
+  return {
+    Hoje: { titulo: 'Hoje', saudacao: true, cor: corPorPeriodo.hoje },
+    Amanha: { titulo: 'Amanhã', cor: corPorPeriodo.amanha },
+    Calendario: { titulo: 'Calendário' },
+    Atrasados: { titulo: 'Atrasados' },
+    Historico: { titulo: 'Feitos' },
+    Categorias: { titulo: 'Categorias' },
+    Compartilhados: { titulo: 'Compartilhados' },
+    Config: { titulo: 'Configurações' },
+  };
+}
 
 const Drawer = createDrawerNavigator();
 const Stack = createNativeStackNavigator();
@@ -57,6 +67,12 @@ const ITENS_MENU: { rota: string; label: string; icone: string }[] = [
 ];
 
 function ConteudoDrawer(props: DrawerContentComponentProps) {
+  const { colors, corPorPeriodo, corPorPeriodoSoft } = useTheme();
+  const styles = useMemo(
+    () => criarEstilos(colors, corPorPeriodo, corPorPeriodoSoft),
+    [colors, corPorPeriodo, corPorPeriodoSoft],
+  );
+  const { usuario } = useAuth();
   const { itens } = useItems();
   const { recebidos } = useCompartilhamentos();
   const quantidadeAtrasados = useMemo(() => itensAtrasados(itens).length, [itens]);
@@ -68,6 +84,22 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
 
   return (
     <DrawerContentScrollView {...props} style={styles.drawer} contentContainerStyle={styles.drawerConteudo}>
+      {usuario && (
+        // Ponto mais visível/frequente pra saber com que e-mail está logado
+        // (o Drawer é aberto o tempo todo) — tocar abre a tela de contas,
+        // ponto de entrada natural pra trocar ou adicionar outra conta.
+        <Pressable style={styles.contaAtiva} onPress={() => props.navigation.navigate('Contas')}>
+          <Avatar nome={usuario.nome} email={usuario.email} fotoUrl={usuario.fotoUrl} tamanho={40} />
+          <View style={styles.contaAtivaInfo}>
+            <Text style={styles.contaAtivaNome} numberOfLines={1}>
+              {usuario.nome}
+            </Text>
+            <Text style={styles.contaAtivaEmail} numberOfLines={1}>
+              {usuario.email}
+            </Text>
+          </View>
+        </Pressable>
+      )}
       {ITENS_MENU.map((item) => {
         const ativo = item.rota === rotaAtiva;
         const quantidadeBadge =
@@ -97,11 +129,13 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
 }
 
 function DrawerNavigator() {
+  const { colors, corPorPeriodo } = useTheme();
   // Rota ativa do Drawer, pra saber qual título/saudação o TopBar
   // compartilhado abaixo deve mostrar — ver screenListeners no
   // Drawer.Navigator. Começa em "Hoje" (rota inicial do drawer).
   const [rotaAtiva, setRotaAtiva] = useState('Hoje');
-  const configTopo = CONFIG_TOPBAR[rotaAtiva] ?? CONFIG_TOPBAR.Hoje;
+  const configuracoesTopBar = useMemo(() => configTopBar(corPorPeriodo), [corPorPeriodo]);
+  const configTopo = configuracoesTopBar[rotaAtiva] ?? configuracoesTopBar.Hoje;
 
   return (
     <View style={{ flex: 1 }}>
@@ -154,6 +188,7 @@ function DrawerNavigator() {
 }
 
 export function RootNavigator() {
+  const { colors } = useTheme();
   return (
     <Stack.Navigator>
       <Stack.Screen name="Tabs" component={DrawerNavigator} options={{ headerShown: false }} />
@@ -187,11 +222,36 @@ export function RootNavigator() {
           headerTitleStyle: { fontFamily: fonts.bold },
         }}
       />
+      <Stack.Screen
+        name="Contas"
+        component={ContasScreen}
+        options={{
+          title: 'Contas',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: colors.surface },
+          headerTitleStyle: { fontFamily: fonts.bold },
+        }}
+      />
+      <Stack.Screen
+        name="AdicionarConta"
+        component={AdicionarContaScreen}
+        options={{
+          title: 'Adicionar conta',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: colors.surface },
+          headerTitleStyle: { fontFamily: fonts.bold },
+        }}
+      />
     </Stack.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(
+  colors: Paleta,
+  corPorPeriodo: Record<PeriodoKey, string>,
+  corPorPeriodoSoft: Record<PeriodoKey, string>,
+) {
+  return StyleSheet.create({
   drawer: {
     backgroundColor: colors.surface,
   },
@@ -199,6 +259,19 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingHorizontal: 12,
   },
+  contaAtiva: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 18,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  contaAtivaInfo: { flex: 1 },
+  contaAtivaNome: { fontFamily: fonts.bold, fontSize: 15, color: colors.textPrimary },
+  contaAtivaEmail: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   itemMenu: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -238,4 +311,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.white,
   },
-});
+  });
+}

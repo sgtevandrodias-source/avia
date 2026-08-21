@@ -154,6 +154,11 @@ export async function removerExclusaoPendenteCategoria(): Promise<void> {}
 // API, escopada pelo token do usuário logado) — nada pra limpar.
 export async function limparTudoLocal(): Promise<void> {}
 
+// Build web: não há arquivo SQLite por conta pra trocar/apagar — trocar de
+// conta aqui é só trocar qual token está ativo (ver sessionToken.ts).
+export function definirUsuarioAtivo(): void {}
+export async function apagarBancoDaConta(): Promise<void> {}
+
 // ---- Compartilhamento de itens (Fase 8) ----
 
 interface CompartilhamentoApiResposta {

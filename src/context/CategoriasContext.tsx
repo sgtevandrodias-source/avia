@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as db from '../db/database';
+import { useAuth } from '../auth/AuthContext';
 import type { CategoriaItem, NovaCategoria } from '../types/item';
 
 interface CategoriasContextValue {
@@ -14,6 +15,7 @@ interface CategoriasContextValue {
 const CategoriasContext = createContext<CategoriasContextValue | null>(null);
 
 export function CategoriasProvider({ children }: { children: React.ReactNode }) {
+  const { usuario } = useAuth();
   const [categorias, setCategorias] = useState<CategoriaItem[]>([]);
   const [carregando, setCarregando] = useState(true);
 
@@ -22,9 +24,14 @@ export function CategoriasProvider({ children }: { children: React.ReactNode }) 
     setCategorias(lista);
   }, []);
 
+  // Reage a `usuario?.id` além de rodar no mount: cobre tanto a carga
+  // inicial quanto a troca pra outra conta salva neste aparelho (ver
+  // alternarConta em AuthContext.tsx) — sem isso, trocar de conta trocaria
+  // o arquivo SQLite ativo mas deixaria a tela mostrando as categorias da
+  // conta anterior até algum outro evento forçar um recarregar().
   useEffect(() => {
     recarregar().finally(() => setCarregando(false));
-  }, [recarregar]);
+  }, [recarregar, usuario?.id]);
 
   const adicionarCategoria = useCallback(async (nova: NovaCategoria) => {
     const categoria = await db.criarCategoria(nova);

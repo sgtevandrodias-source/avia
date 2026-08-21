@@ -1,6 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { API_URL } from '../sync/config';
-import { prepararSessaoParaUsuario, redecifrarCacheLocalAposDesbloqueio } from '../sync/sync';
+import {
+  alternarSessaoParaUsuario,
+  prepararSessaoParaUsuario,
+  redecifrarCacheLocalAposDesbloqueio,
+} from '../sync/sync';
+import * as db from '../db/database';
 import { buscarEnvelopeCifra, salvarEnvelopeCifra, type EnvelopeCifra } from '../crypto/apiCifra';
 import { definirChaveAtual } from '../crypto/chaveAtual';
 import { lerChaveLocal, limparChaveLocal, salvarChaveLocal } from '../crypto/chaveCriptografia';
@@ -15,6 +20,7 @@ export interface Usuario {
   id: string;
   email: string;
   nome: string;
+  fotoUrl?: string | null;
 }
 
 interface SessaoSalva {
@@ -22,9 +28,20 @@ interface SessaoSalva {
   usuario: Usuario;
 }
 
+// Todas as contas já logadas neste aparelho, guardadas juntas sob a mesma
+// chave de armazenamento (avia_sessao) — `ativoId` diz qual delas está em
+// uso agora. Quem já usava o app antes desta versão tinha o formato antigo
+// (uma SessaoSalva direta, sem lista); normalizarContasSalvas migra isso em
+// memória na primeira leitura, sem exigir logar de novo.
+interface ContasSalvas {
+  contas: SessaoSalva[];
+  ativoId: string | null;
+}
+
 interface AuthContextValue {
   usuario: Usuario | null;
   token: string | null;
+  contas: Usuario[];
   carregando: boolean;
   erro: string | null;
   googleDisponivel: boolean;
@@ -33,6 +50,8 @@ interface AuthContextValue {
   loginComGoogle: () => Promise<void>;
   definirSenha: (senha: string) => Promise<void>;
   logout: () => Promise<void>;
+  alternarConta: (usuarioId: string) => Promise<void>;
+  removerConta: (usuarioId: string) => Promise<void>;
   // Criptografia ponta a ponta (opcional) — ver src/crypto/.
   // `null` = ainda não verificou (logo após abrir o app/logar).
   criptografiaConfigurada: boolean | null;
@@ -56,9 +75,38 @@ async function chamarAuth(caminho: string, corpo: unknown): Promise<SessaoSalva>
   return dados as SessaoSalva;
 }
 
+function normalizarContasSalvas(bruto: unknown): ContasSalvas {
+  if (bruto && typeof bruto === 'object' && Array.isArray((bruto as { contas?: unknown }).contas)) {
+    const tipado = bruto as ContasSalvas;
+    return { contas: tipado.contas, ativoId: tipado.ativoId ?? null };
+  }
+  // Formato antigo (versões anteriores à alternância de contas): uma sessão
+  // única salva direto, sem envelope de lista.
+  const antiga = bruto as SessaoSalva | null;
+  if (antiga && antiga.token && antiga.usuario) {
+    return { contas: [antiga], ativoId: antiga.usuario.id };
+  }
+  return { contas: [], ativoId: null };
+}
+
+async function lerContasSalvas(): Promise<ContasSalvas> {
+  const dados = await lerSessao();
+  if (!dados) return { contas: [], ativoId: null };
+  try {
+    return normalizarContasSalvas(JSON.parse(dados));
+  } catch {
+    return { contas: [], ativoId: null };
+  }
+}
+
+async function salvarContasSalvas(estado: ContasSalvas): Promise<void> {
+  await salvarSessao(JSON.stringify(estado));
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [contas, setContas] = useState<Usuario[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [criptografiaBloqueada, setCriptografiaBloqueada] = useState(false);
@@ -93,14 +141,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    lerSessao()
-      .then(async (dados) => {
-        if (dados) {
-          const sessao: SessaoSalva = JSON.parse(dados);
-          definirTokenAtual(sessao.token);
-          setToken(sessao.token);
-          setUsuario(sessao.usuario);
-          await verificarCriptografia(sessao.usuario.id);
+    lerContasSalvas()
+      .then(async (estado) => {
+        setContas(estado.contas.map((c) => c.usuario));
+        const ativa = estado.contas.find((c) => c.usuario.id === estado.ativoId);
+        if (ativa) {
+          definirTokenAtual(ativa.token);
+          // Precisa apontar pro arquivo SQLite certo ANTES de setUsuario —
+          // é só depois que usuario deixa de ser null que o resto da árvore
+          // (Categorias/Compartilhamentos/Items providers) monta e começa a
+          // ler o banco local (ver App.tsx Conteudo()).
+          db.definirUsuarioAtivo(ativa.usuario.id);
+          setToken(ativa.token);
+          setUsuario(ativa.usuario);
+          await verificarCriptografia(ativa.usuario.id);
           registrarTokenPush();
         }
       })
@@ -110,11 +164,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const salvar = useCallback(
     async (sessao: SessaoSalva) => {
-      await salvarSessao(JSON.stringify(sessao));
+      // Login novo (tela de login OU "Adicionar conta") — insere ou
+      // atualiza essa conta na lista salva neste aparelho e marca como
+      // ativa. É o mesmo caminho pro primeiro login e pra "adicionar outra
+      // conta"; a única diferença é de qual tela isso foi chamado.
+      const estadoAtual = await lerContasSalvas();
+      const outras = estadoAtual.contas.filter((c) => c.usuario.id !== sessao.usuario.id);
+      const novoEstado: ContasSalvas = { contas: [...outras, sessao], ativoId: sessao.usuario.id };
+      await salvarContasSalvas(novoEstado);
+      setContas(novoEstado.contas.map((c) => c.usuario));
+
       definirTokenAtual(sessao.token);
-      // Sessao nova (login/cadastro) — pode ser outro usuario no mesmo
-      // aparelho: se for, apaga os dados locais da conta anterior antes de
-      // puxar os dados da conta atual (senão os itens ficam misturados).
+      // Cada conta tem seu próprio arquivo SQLite local (ver
+      // definirUsuarioAtivo em database.ts) — prepararSessaoParaUsuario só
+      // troca pra ele e força uma sincronização completa, sem risco de
+      // misturar dados de contas diferentes.
       await prepararSessaoParaUsuario(sessao.usuario.id);
       setToken(sessao.token);
       setUsuario(sessao.usuario);
@@ -122,6 +186,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       registrarTokenPush();
     },
     [verificarCriptografia],
+  );
+
+  /** Troca pra outra conta JÁ salva neste aparelho — ver ContasScreen. */
+  const alternarConta = useCallback(
+    async (usuarioId: string) => {
+      const estado = await lerContasSalvas();
+      const alvo = estado.contas.find((c) => c.usuario.id === usuarioId);
+      if (!alvo || alvo.usuario.id === usuario?.id) return;
+      await salvarContasSalvas({ ...estado, ativoId: usuarioId });
+
+      definirTokenAtual(alvo.token);
+      await alternarSessaoParaUsuario(alvo.usuario.id);
+      setToken(alvo.token);
+      setUsuario(alvo.usuario);
+      await verificarCriptografia(alvo.usuario.id);
+      registrarTokenPush();
+    },
+    [usuario, verificarCriptografia],
+  );
+
+  /**
+   * Esquece uma conta deste aparelho (remove da lista salva e apaga o
+   * cache local dela). Se era a conta ativa, alterna pra outra salva
+   * restante ou, se não sobrar nenhuma, volta pra tela de login — mesmo
+   * efeito do "Sair" de antes, quando só existia uma conta possível.
+   */
+  const removerConta = useCallback(
+    async (usuarioId: string) => {
+      const eraAtiva = usuario?.id === usuarioId;
+      const estado = await lerContasSalvas();
+      const restantes = estado.contas.filter((c) => c.usuario.id !== usuarioId);
+
+      if (eraAtiva) {
+        await limparChaveLocal(usuarioId);
+        definirChaveAtual(null);
+        setCriptografiaBloqueada(false);
+        setCriptografiaConfigurada(null);
+      }
+      await db.apagarBancoDaConta(usuarioId);
+
+      if (restantes.length === 0) {
+        await limparSessao();
+        setContas([]);
+        if (eraAtiva) {
+          definirTokenAtual(null);
+          setToken(null);
+          setUsuario(null);
+        }
+        return;
+      }
+
+      const novoAtivoId = eraAtiva ? restantes[0].usuario.id : estado.ativoId;
+      await salvarContasSalvas({ contas: restantes, ativoId: novoAtivoId });
+      setContas(restantes.map((c) => c.usuario));
+
+      if (eraAtiva) {
+        const novaAtiva = restantes[0];
+        definirTokenAtual(novaAtiva.token);
+        await alternarSessaoParaUsuario(novaAtiva.usuario.id);
+        setToken(novaAtiva.token);
+        setUsuario(novaAtiva.usuario);
+        await verificarCriptografia(novaAtiva.usuario.id);
+        registrarTokenPush();
+      }
+    },
+    [usuario, verificarCriptografia],
   );
 
   const registrar = useCallback(
@@ -183,16 +313,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // "Sair" continua removendo só a conta ativa deste aparelho — se houver
+  // outras contas salvas, o app alterna pra uma delas em vez de voltar pra
+  // tela de login (ver removerConta acima).
   const logout = useCallback(async () => {
-    if (usuario) await limparChaveLocal(usuario.id);
-    definirChaveAtual(null);
-    setCriptografiaBloqueada(false);
-    setCriptografiaConfigurada(null);
-    await limparSessao();
-    definirTokenAtual(null);
-    setToken(null);
-    setUsuario(null);
-  }, [usuario]);
+    if (usuario) await removerConta(usuario.id);
+  }, [usuario, removerConta]);
 
   /** Gera a DEK, embrulha com a frase-senha e com um novo código de recuperação, salva no servidor e no aparelho. Retorna o código de recuperação (mostrar UMA vez). */
   const configurarCriptografia = useCallback(
@@ -261,6 +387,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         usuario,
         token,
+        contas,
         carregando,
         erro,
         googleDisponivel: googleDisponivel(),
@@ -269,6 +396,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginComGoogle,
         definirSenha,
         logout,
+        alternarConta,
+        removerConta,
         criptografiaConfigurada,
         criptografiaBloqueada,
         configurarCriptografia,

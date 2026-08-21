@@ -1,6 +1,6 @@
 import { addDays, addMonths, endOfDay, format, isWithinInterval, parseISO, set, startOfDay } from 'date-fns';
 import type { Item } from '../types/item';
-import type { PeriodoKey } from '../theme/colors';
+import type { PeriodoKey } from '../theme/paletas';
 
 export function hojeISO(): string {
   return format(startOfDay(new Date()), 'yyyy-MM-dd');

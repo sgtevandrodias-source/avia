@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
@@ -12,7 +12,8 @@ import { parseItem, type ResultadoParse } from '../parser/parseItem';
 import * as db from '../db/database';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { categoriaInfo } from '../types/item';
 import { avisar } from '../utils/confirm';
@@ -20,6 +21,8 @@ import { avisar } from '../utils/confirm';
 const CHAVE_DICA_CAPTURA = 'dicaCapturaVista';
 
 export function CapturaRapida() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const [texto, setTexto] = useState('');
   const [resultado, setResultado] = useState<ResultadoParse | null>(null);
   const [ouvindo, setOuvindo] = useState(false);
@@ -245,7 +248,8 @@ export function CapturaRapida() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   dica: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -370,4 +374,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.white,
   },
-});
+  });
+}

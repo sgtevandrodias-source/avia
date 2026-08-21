@@ -63,6 +63,7 @@ interface UsuarioRow {
   nome: string;
   senha_hash: string | null;
   google_sub: string | null;
+  foto_url: string | null;
   criado_em: string;
 }
 
@@ -150,7 +151,7 @@ function rowParaApi(row: ItemRow): ItemApi {
 }
 
 function usuarioParaApi(row: UsuarioRow) {
-  return { id: row.id, email: row.email, nome: row.nome };
+  return { id: row.id, email: row.email, nome: row.nome, fotoUrl: row.foto_url };
 }
 
 function categoriaRowParaApi(row: CategoriaRow): CategoriaApi {
@@ -412,7 +413,7 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
     await semearCategoriasPadrao(env.DB, id);
 
     const token = await criarJwt({ sub: id, email, nome }, env.JWT_SECRET);
-    return json({ token, usuario: { id, email, nome } });
+    return json({ token, usuario: { id, email, nome, fotoUrl: null } });
   }
 
   if (rota === 'login' && request.method === 'POST') {
@@ -444,17 +445,35 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
       // Se já existir conta com esse e-mail (criada via senha), vincula o Google a ela.
       usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(payload.email).first<UsuarioRow>();
       if (usuario) {
-        await env.DB.prepare('UPDATE usuarios SET google_sub = ? WHERE id = ?').bind(payload.sub, usuario.id).run();
+        await env.DB.prepare('UPDATE usuarios SET google_sub = ?, foto_url = ? WHERE id = ?')
+          .bind(payload.sub, payload.picture ?? null, usuario.id)
+          .run();
+        usuario.foto_url = payload.picture ?? null;
       } else {
         const id = crypto.randomUUID();
         await env.DB.prepare(
-          'INSERT INTO usuarios (id, email, nome, senha_hash, google_sub, criado_em) VALUES (?, ?, ?, NULL, ?, ?)',
+          'INSERT INTO usuarios (id, email, nome, senha_hash, google_sub, foto_url, criado_em) VALUES (?, ?, ?, NULL, ?, ?, ?)',
         )
-          .bind(id, payload.email, payload.name, payload.sub, new Date().toISOString())
+          .bind(id, payload.email, payload.name, payload.sub, payload.picture ?? null, new Date().toISOString())
           .run();
         await semearCategoriasPadrao(env.DB, id);
-        usuario = { id, email: payload.email, nome: payload.name, senha_hash: null, google_sub: payload.sub, criado_em: '' };
+        usuario = {
+          id,
+          email: payload.email,
+          nome: payload.name,
+          senha_hash: null,
+          google_sub: payload.sub,
+          foto_url: payload.picture ?? null,
+          criado_em: '',
+        };
       }
+    } else if (usuario.foto_url !== (payload.picture ?? null)) {
+      // Login de Google de quem já tem conta — a foto pode ter mudado desde
+      // o último login; mantém sincronizada com o que o Google reporta agora.
+      await env.DB.prepare('UPDATE usuarios SET foto_url = ? WHERE id = ?')
+        .bind(payload.picture ?? null, usuario.id)
+        .run();
+      usuario.foto_url = payload.picture ?? null;
     }
 
     const token = await criarJwt({ sub: usuario.id, email: usuario.email, nome: usuario.nome }, env.JWT_SECRET);

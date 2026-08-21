@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
 import { foiAvisoDispensado, salvarAvisoDispensado } from '../crypto/chaveCriptografia';
 import { navegarPara } from '../navigation/navigationRef';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 
 // Dois avisos sobre a criptografia opcional, renderizados uma vez (fora da
@@ -14,6 +15,8 @@ import { fonts } from '../theme/typography';
 // 2. Modal único, pulável, oferecendo configurar a criptografia — só aparece
 //    uma vez por conta+aparelho (ver foiAvisoDispensado).
 export function CriptografiaAvisos() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { usuario, criptografiaConfigurada, criptografiaBloqueada } = useAuth();
   const [mostrarOferta, setMostrarOferta] = useState(false);
 
@@ -70,7 +73,8 @@ export function CriptografiaAvisos() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   banner: {
     backgroundColor: colors.prioritySoft,
     borderBottomWidth: 1,
@@ -117,4 +121,5 @@ const styles = StyleSheet.create({
   botaoPrimarioTexto: { fontFamily: fonts.bold, fontSize: 14, color: colors.white },
   botaoSecundario: { marginTop: 10, alignItems: 'center', paddingVertical: 8 },
   botaoSecundarioTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
-});
+  });
+}

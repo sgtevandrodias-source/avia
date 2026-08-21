@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import * as db from '../db/database';
+import { useAuth } from '../auth/AuthContext';
 import { obterTokenAtual } from '../auth/sessionToken';
 import { sincronizar } from '../sync/sync';
 import { API_URL } from '../sync/config';
@@ -38,6 +39,7 @@ async function chamarApi(caminho: string, opcoes: RequestInit): Promise<void> {
 }
 
 export function CompartilhamentosProvider({ children }: { children: React.ReactNode }) {
+  const { usuario } = useAuth();
   const [itensCompartilhados, setItensCompartilhados] = useState<ItemCompartilhadoLocal[]>([]);
   const [carregando, setCarregando] = useState(true);
   const { categorias } = useCategorias();
@@ -46,9 +48,12 @@ export function CompartilhamentosProvider({ children }: { children: React.ReactN
     setItensCompartilhados(await db.listarItensCompartilhados());
   }, []);
 
+  // Reage a `usuario?.id` além de rodar no mount: cobre tanto a carga
+  // inicial quanto a troca pra outra conta salva neste aparelho (ver
+  // alternarConta em AuthContext.tsx).
   useEffect(() => {
     recarregar().finally(() => setCarregando(false));
-  }, [recarregar]);
+  }, [recarregar, usuario?.id]);
 
   // As ações abaixo (compartilhar/responder/concluir/remover) chamam a API
   // direto — diferente de items/categorias, não têm fila de push própria.

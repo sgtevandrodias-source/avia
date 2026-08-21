@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,10 +12,20 @@ import {
   View,
 } from 'react-native';
 import { useAuth } from '../auth/AuthContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 
-export function LoginScreen() {
+interface Props {
+  // Chamado só quando a operação deu certo — omitido na tela de login raiz
+  // (App.tsx troca de árvore sozinho assim que `usuario` deixa de ser null),
+  // usado pela AdicionarContaScreen pra fechar o modal depois de entrar.
+  aoConcluir?: () => void;
+}
+
+export function LoginScreen({ aoConcluir }: Props = {}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => criarEstilos(colors), [colors]);
   const { login, registrar, loginComGoogle, googleDisponivel, erro } = useAuth();
   const [modoCadastro, setModoCadastro] = useState(false);
   const [nome, setNome] = useState('');
@@ -32,6 +42,7 @@ export function LoginScreen() {
       } else {
         await login(email.trim(), senha);
       }
+      aoConcluir?.();
     } catch {
       // erro já fica exposto via useAuth().erro
     } finally {
@@ -43,6 +54,7 @@ export function LoginScreen() {
     setEnviando(true);
     try {
       await loginComGoogle();
+      aoConcluir?.();
     } catch {
       // erro já fica exposto via useAuth().erro
     } finally {
@@ -121,7 +133,8 @@ export function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function criarEstilos(colors: Paleta) {
+  return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: 24, paddingTop: 32, alignItems: 'center' },
   logo: { width: 288, height: 288, borderRadius: 48, marginBottom: 12 },
@@ -179,4 +192,5 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'center',
   },
-});
+  });
+}

@@ -12,6 +12,7 @@ import { CompartilhamentosProvider } from './src/context/CompartilhamentosContex
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { useAviaFonts } from './src/theme/typography';
+import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { configurarCanalAndroid, solicitarPermissaoNotificacoes } from './src/notifications/notifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -36,6 +37,11 @@ function Conteudo() {
       )}
     </NavigationContainer>
   );
+}
+
+function BarraDeStatus() {
+  const { esquemaAtivo } = useTheme();
+  return <StatusBar style={esquemaAtivo === 'escuro' ? 'light' : 'dark'} />;
 }
 
 export default function App() {
@@ -66,12 +72,14 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <Conteudo />
-        </AuthProvider>
-        <StatusBar style="dark" />
-      </SafeAreaProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <Conteudo />
+          </AuthProvider>
+          <BarraDeStatus />
+        </SafeAreaProvider>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }
