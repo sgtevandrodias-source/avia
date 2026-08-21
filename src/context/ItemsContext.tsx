@@ -69,7 +69,16 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     setSincronizando(true);
     try {
       await sincronizar();
-      await Promise.all([recarregar(), recarregarCategorias()]);
+      // recarregar()/recarregarCategorias() fazem sua própria chamada de
+      // rede (independente do push/pull acima) e podem falhar por um
+      // soluço passageiro — sincronizar() já nunca lança por design ("o app
+      // continua funcionando 100% local"), então isso aqui precisa seguir a
+      // mesma regra. Sem o catch, quem chama sincronizarAgora() dentro de um
+      // try/catch (ex.: telas de configurar/desbloquear criptografia) via
+      // erroneamente reportar "falhou" mesmo quando a ação principal (ex.:
+      // o desbloqueio) já tinha dado certo — só a atualização da lista
+      // depois é que tropeçou, e ela mesma se recupera no próximo ciclo.
+      await Promise.all([recarregar(), recarregarCategorias()]).catch(() => {});
     } finally {
       sincronizacaoEmCurso.current = false;
       setSincronizando(false);
