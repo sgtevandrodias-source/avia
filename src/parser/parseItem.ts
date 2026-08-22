@@ -208,6 +208,50 @@ function parseHora(horaStr: string, minutoStr: string | undefined, periodo: stri
   return `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
 }
 
+// Hora falada por extenso ("vinte e uma horas", "nove horas") — cobre 0 a 23,
+// suficiente pro relógio de 24h. "vinte e X" (21/22/23) é o único caso
+// composto que aparece nesse intervalo.
+const HORA_EXTENSO: Record<string, number> = {
+  zero: 0,
+  uma: 1,
+  um: 1,
+  duas: 2,
+  dois: 2,
+  tres: 3,
+  quatro: 4,
+  cinco: 5,
+  seis: 6,
+  sete: 7,
+  oito: 8,
+  nove: 9,
+  dez: 10,
+  onze: 11,
+  doze: 12,
+  treze: 13,
+  quatorze: 14,
+  catorze: 14,
+  quinze: 15,
+  dezesseis: 16,
+  dezessete: 17,
+  dezoito: 18,
+  dezenove: 19,
+  vinte: 20,
+};
+
+// Grupo CAPTURADO (não ?:) de propósito — quem usa essa parte da regex
+// precisa recuperar exatamente qual frase de hora bateu, pra converter
+// com horaExtensoParaNumero.
+const HORA_EXTENSO_REGEX_PARTE =
+  '(vinte\\s+e\\s+(?:um|uma|dois|duas|tres)|zero|uma|um|duas|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte)';
+
+function horaExtensoParaNumero(trecho: string): number {
+  const matchVinteE = trecho.match(/^vinte\s+e\s+(um|uma|dois|duas|tres)$/);
+  if (matchVinteE) {
+    return 20 + (HORA_EXTENSO[matchVinteE[1]] as number);
+  }
+  return HORA_EXTENSO[trecho] ?? 0;
+}
+
 function detectarHorario(textoOriginal: string): DeteccaoHorario | null {
   const texto = normalizar(textoOriginal);
   const textoSemAcento = removerAcentosLeve(texto);
@@ -239,6 +283,38 @@ function detectarHorario(textoOriginal: string): DeteccaoHorario | null {
       tipoHorario: 'compromisso',
       hora: parseHora(matchCompromisso[1], matchCompromisso[2], matchCompromisso[3]),
       trecho: matchCompromisso[0],
+    };
+  }
+
+  // Hora sem "às"/"até" na frente — quem fala "reunião hoje, 15h" ou "redigir
+  // relatório, hoje, vinte e uma horas" também quer dizer um horário marcado,
+  // só que sem a preposição. Checado por último (menos específico que os
+  // dois de cima) e sempre como 'compromisso', igual "às" — nunca 'prazo',
+  // que exige a palavra "até" explícita pra não virar ambíguo.
+  // O marcador de hora ("h"/"horas") precisa aparecer em ALGUM lugar — ou
+  // embutido junto do minuto ("21h30"), ou solto depois da hora ("21h",
+  // "21 horas") — nunca os dois de fora, senão um número qualquer no meio
+  // da frase seria confundido com hora.
+  const matchNumericoSemPreposicao = textoSemAcento.match(
+    /\b(\d{1,2})(?:(?:[:h](\d{2}))|\s*(?:h\b|horas?\b))\s*(da\s+manh[aã]|da\s+tarde|da\s+noite)?/,
+  );
+  if (matchNumericoSemPreposicao) {
+    return {
+      tipoHorario: 'compromisso',
+      hora: parseHora(matchNumericoSemPreposicao[1], matchNumericoSemPreposicao[2], matchNumericoSemPreposicao[3]),
+      trecho: matchNumericoSemPreposicao[0],
+    };
+  }
+
+  const matchExtensoSemPreposicao = textoSemAcento.match(
+    new RegExp(`\\b${HORA_EXTENSO_REGEX_PARTE}\\s+horas?\\b\\s*(da\\s+manh[aã]|da\\s+tarde|da\\s+noite)?`),
+  );
+  if (matchExtensoSemPreposicao) {
+    const numeroHora = horaExtensoParaNumero(matchExtensoSemPreposicao[1]);
+    return {
+      tipoHorario: 'compromisso',
+      hora: parseHora(String(numeroHora), undefined, matchExtensoSemPreposicao[2]),
+      trecho: matchExtensoSemPreposicao[0],
     };
   }
 
