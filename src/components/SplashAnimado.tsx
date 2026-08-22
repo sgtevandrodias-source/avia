@@ -4,14 +4,18 @@ import { fonts } from '../theme/typography';
 
 // Splash "de verdade" mostrado em JS, por cima do resto do app — o splash
 // NATIVO (ver plugin expo-splash-screen em app.json) só existe pelo tempo
-// mínimo inevitável até o JS montar (não dá pra animar nele, e num aparelho
-// específico a imagem vinha aparecendo cortada/fora de centro; por isso ele
-// agora é só a cor de fundo, sem imagem nenhuma — elimina esse bug de vez).
-// Esse componente é quem realmente marca a abertura do app: logo entra com
-// movimento (desliza e cresce), a frase aparece em seguida, segura um
-// instante e desvanece — revelando o app por trás, que já carregou em
-// paralelo (ver App.tsx: AuthProvider monta ao mesmo tempo que este splash
-// anima, não espera um pelo outro).
+// mínimo inevitável até o JS montar (não dá pra animar nele). Nesse meio
+// tempo ele usa android-icon-foreground.png (mesmo asset do ícone
+// adaptativo, já com margem de segurança) em vez do logo largo original —
+// esse tinha a arte quase colada na borda do quadro, e o recorte
+// circular/arredondado que o Android 12+ aplica sobre o ícone do splash
+// (mesmo raciocínio de ícone adaptativo) cortava as pontas (ex.: o final
+// das linhas de movimento), causando o corte no canto relatado num
+// aparelho específico. Esse componente é quem realmente marca a abertura
+// do app: logo entra com movimento (desliza e cresce), a frase aparece em
+// seguida, segura um instante e desvanece — revelando o app por trás, que
+// já carregou em paralelo (ver App.tsx: AuthProvider monta ao mesmo tempo
+// que este splash anima, não espera um pelo outro).
 interface Props {
   aoTerminar: () => void;
 }
