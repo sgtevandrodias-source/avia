@@ -380,6 +380,24 @@ async function sincronizarConclusaoCompartilhamentos(
     )
     .bind(concluido ? 1 : 0, new Date().toISOString(), itemId, criadorId)
     .run();
+
+  // Avisa por push só quando o criador MARCA como feito — sem isso, quem
+  // recebeu só saberia na próxima vez que o aparelho dele sincronizasse
+  // sozinho (poll de 20s, abrir o app), o que pode demorar se o app dele
+  // estiver fechado (ver enviarPushConclusaoCompartilhamento).
+  if (!concluido) return;
+
+  const linha = await db
+    .prepare(
+      `SELECT c.id, c.destinatario_id, c.titulo, u.nome as criador_nome
+       FROM compartilhamentos c JOIN usuarios u ON u.id = c.criador_id
+       WHERE c.item_id = ? AND c.criador_id = ? AND c.excluido = 0`,
+    )
+    .bind(itemId, criadorId)
+    .first<{ id: string; destinatario_id: string; titulo: string; criador_nome: string }>();
+  if (!linha) return;
+
+  await enviarPushConclusaoCompartilhamento(db, linha.destinatario_id, linha.criador_nome, linha.titulo, linha.id);
 }
 
 async function autenticar(request: Request, env: Env): Promise<string | null> {
@@ -663,11 +681,11 @@ async function buscarCompartilhamentoPorId(db: D1Database, id: string): Promise<
  * aqui: quem precisa da credencial FCM é o serviço do Expo, configurado via
  * EAS no lado do cliente, não este Worker.
  */
-async function enviarPushCompartilhamento(
+async function enviarPush(
   db: D1Database,
   destinatarioId: string,
-  criadorNome: string,
-  tituloItem: string,
+  titulo: string,
+  corpo: string,
   compartilhamentoId: string,
 ): Promise<void> {
   try {
@@ -679,8 +697,12 @@ async function enviarPushCompartilhamento(
 
     const mensagens = results.map((r) => ({
       to: r.token,
-      title: 'Novo compromisso compartilhado',
-      body: `${criadorNome} compartilhou "${tituloItem}" com você`,
+      title: titulo,
+      body: corpo,
+      // "compartilhamento" (não um tipo novo): o cliente já sabe tratar esse
+      // toque — sincroniza e navega pra tela Compartilhados (ver
+      // CompartilhamentosContext.tsx) — serve igual bem pra "convite novo"
+      // e pra "item concluído pelo criador".
       data: { tipo: 'compartilhamento', compartilhamentoId },
     }));
 
@@ -690,8 +712,51 @@ async function enviarPushCompartilhamento(
       body: JSON.stringify(mensagens),
     });
   } catch {
-    // best-effort — quem compartilhou já recebeu {ok:true} de qualquer forma.
+    // best-effort — quem disparou a ação já recebeu uma resposta ok de qualquer forma.
   }
+}
+
+async function enviarPushCompartilhamento(
+  db: D1Database,
+  destinatarioId: string,
+  criadorNome: string,
+  tituloItem: string,
+  compartilhamentoId: string,
+): Promise<void> {
+  await enviarPush(
+    db,
+    destinatarioId,
+    'Novo compromisso compartilhado',
+    `${criadorNome} compartilhou "${tituloItem}" com você`,
+    compartilhamentoId,
+  );
+}
+
+/**
+ * Avisa o destinatário quando o CRIADOR marca o item original como feito —
+ * fecha o mesmo tipo de lacuna que o push de convite já fecha pro
+ * compartilhamento em si: sem isso, a propagação de conclusão (ver
+ * sincronizarConclusaoCompartilhamentos) só chega no aparelho do
+ * destinatário na próxima vez que ele sincronizar (poll de 20s, abrir o
+ * app, ou sincronizar manualmente) — o que pode levar bom tempo se o app
+ * dele estiver fechado. Só dispara quando `concluido` é true: desmarcar
+ * (voltar pra pendente) não é um evento urgente o bastante pra justificar
+ * uma notificação.
+ */
+async function enviarPushConclusaoCompartilhamento(
+  db: D1Database,
+  destinatarioId: string,
+  criadorNome: string,
+  tituloItem: string,
+  compartilhamentoId: string,
+): Promise<void> {
+  await enviarPush(
+    db,
+    destinatarioId,
+    'Compromisso concluído',
+    `${criadorNome} marcou "${tituloItem}" como feito`,
+    compartilhamentoId,
+  );
 }
 
 async function tratarCompartilhamentos(

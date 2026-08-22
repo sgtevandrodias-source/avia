@@ -283,25 +283,33 @@ const PALAVRAS_CATEGORIA: { categoria: Categoria; palavras: string[] }[] = [
       'expediente',
     ],
   },
+  // Os grupos abaixo (família, casa, saúde, estudos, contas, lazer/social)
+  // eram categorias de sistema próprias antes da redução pra só 4 categorias
+  // (Pessoal, Trabalho, Diversos, Aniversário — ver migração 0017). Continuam
+  // reconhecendo as mesmas palavras faladas/digitadas, só que agora todas
+  // caem em 'outro' (Diversos) em vez de um id de categoria que não existe
+  // mais — sem isso, um item detectado por uma dessas palavras vinha com uma
+  // categoria "fantasma", sem chip correspondente pra aparecer marcado na
+  // tela de edição.
   {
-    categoria: 'familia',
+    categoria: 'outro',
     palavras: ['familia', 'família', 'mae', 'mãe', 'pai', 'filho', 'filha', 'irmao', 'irmão', 'irma', 'irmã'],
   },
   {
-    categoria: 'casa',
+    categoria: 'outro',
     palavras: ['faxina', 'limpeza', 'arrumar a casa', 'lavar roupa', 'mercado', 'supermercado', 'encanador', 'eletricista'],
   },
-  { categoria: 'saude', palavras: ['medico', 'médico', 'consulta', 'exame', 'dentista'] },
+  { categoria: 'outro', palavras: ['medico', 'médico', 'consulta', 'exame', 'dentista'] },
   {
-    categoria: 'estudos',
+    categoria: 'outro',
     palavras: ['estudar', 'prova', 'faculdade', 'aula', 'curso', 'vestibular', 'enem', 'tcc'],
   },
   {
-    categoria: 'compromisso_fixo',
+    categoria: 'outro',
     palavras: ['conta', 'boleto', 'fatura', 'imposto', 'aluguel', 'financiamento', 'pagamento', 'orcamento', 'orçamento'],
   },
   {
-    categoria: 'social',
+    categoria: 'outro',
     palavras: ['festa', 'encontro com', 'happy hour', 'cinema', 'passeio', 'viagem', 'viajar'],
   },
 ];

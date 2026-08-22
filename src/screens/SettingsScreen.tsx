@@ -207,28 +207,26 @@ export function SettingsScreen() {
       <Text style={styles.secao}>Sobre</Text>
       <View style={styles.cartaoSenha}>
         <Text style={styles.textoSobre}>
-          E o que que isso tem a ver com um aplicativo de produtividade? Bom, sendo uma pessoa muito atarefada,
-          muitas vezes me peguei anotando coisas no papel, na agenda do Google, na agenda física. No dia a dia do
-          trabalho e dos afazeres domésticos, eu ficava perdido em meio a tantas coisas pra fazer. Foi assim que
-          eu disse pra mim mesmo: &quot;Avia, Evandro! Resolva isso!&quot; Assim nasceu a ideia desse app: um app
-          que resolve.
+          &quot;Avia&quot; é gíria nordestina pra &quot;resolve logo, dá um jeito&quot; — e é exatamente essa a
+          proposta do app: parar de espalhar compromisso em três lugares (papel, agenda do Google, memória) e ter
+          um único lugar que te diz, sem enrolação, o que precisa da sua atenção agora.
         </Text>
         <Text style={styles.textoSobre}>
-          Resolve porque junta tudo num lugar só — compromissos, prazos, tarefas de casa e do trabalho — sem
-          depender de papel, de outro app de agenda ou da sua memória. Resolve porque você fala ou digita
-          rapidinho o que precisa fazer, e o Avia organiza pra você: separa o que é urgente, o que pode esperar,
-          o que já passou da hora. Resolve porque avisa antes de você esquecer, não depois. E resolve porque,
-          quando alguém mais também precisa saber de um compromisso ou lembrete, dá pra compartilhar na hora —
-          sem duplicar anotação, sem mensagem que se perde na conversa.
+          Funciona assim: você fala ou digita rápido o que precisa fazer — &quot;reunião amanhã às 15h&quot;,
+          &quot;pagar o boleto até sexta&quot; — e o Avia entende sozinho a data, o horário e a categoria. Ele
+          separa o urgente do que pode esperar, avisa antes de você esquecer (não depois), e deixa claro o que já
+          passou da hora. Quando alguém mais também precisa saber de um compromisso, dá pra compartilhar na hora,
+          sem duplicar anotação nem depender de mensagem que se perde na conversa.
         </Text>
         <Text style={styles.textoSobre}>
-          No fim das contas, o Avia é o &quot;resolve&quot; que eu queria pra mim. Espero que resolva pra você
-          também.
+          Nasceu de um problema bem real: eu vivia perdido entre papel, agenda do Google e memória, tentando dar
+          conta do trabalho e da casa ao mesmo tempo, sem confiar de verdade em nenhum desses lugares. Cansei
+          disso e construí o app que eu mesmo precisava — daí o nome: &quot;Avia, Evandro! Resolve isso!&quot;
         </Text>
         <Text style={[styles.textoSobre, styles.textoSobreApoio]}>
-          Se você gostou, use à vontade. Se achou útil e quiser colaborar com a manutenção do app, fique à
-          vontade pra contribuir com um Pix de qualquer valor. Ou só me manda um feedback sobre o que posso
-          fazer pra melhorar o app.
+          O Avia é gratuito e vai continuar sendo. Se ele te ajudou a organizar a vida, um Pix de qualquer valor
+          ajuda a manter o projeto no ar — mas é só se fizer sentido pra você. E se tiver ideia ou encontrar algo
+          que não funciona bem, me manda um feedback, é o que mais me ajuda a melhorar o app.
         </Text>
 
         <Pressable style={styles.linhaPix} onPress={copiarChavePix}>
