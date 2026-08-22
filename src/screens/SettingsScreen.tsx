@@ -9,7 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { useItems } from '../context/ItemsContext';
-import { obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
+import { forcarResyncCompleto, obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
 import { useTheme, type PreferenciaTema } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
@@ -35,6 +35,7 @@ export function SettingsScreen() {
   const [salvandoSenha, setSalvandoSenha] = useState(false);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
+  const [forcandoResync, setForcandoResync] = useState(false);
 
   const atualizarStatusSync = useCallback(() => {
     obterStatusSincronizacao().then(setStatusSync);
@@ -53,6 +54,29 @@ export function SettingsScreen() {
     await Clipboard.setStringAsync(CHAVE_PIX);
     setPixCopiado(true);
     setTimeout(() => setPixCopiado(false), 2000);
+  };
+
+  // Diferente de "Sincronizar agora" (incremental, a partir do último
+  // cursor salvo): zera os cursores antes de sincronizar, forçando um
+  // pull/push completo — usado quando o cache local desta conta neste
+  // aparelho parece desatualizado (ex.: categorias ou itens que não
+  // batem com o que aparece em outro aparelho/conta) e uma sincronização
+  // normal não resolve.
+  const forcarAtualizacaoCompleta = () => {
+    confirmar(
+      'Forçar atualização completa',
+      'Isso vai baixar tudo de novo do servidor pra esta conta neste aparelho. Pode levar alguns segundos. Continuar?',
+      async () => {
+        setForcandoResync(true);
+        try {
+          await forcarResyncCompleto();
+          await sincronizarAgora();
+          avisar('Pronto', 'Atualização completa concluída.');
+        } finally {
+          setForcandoResync(false);
+        }
+      },
+    );
   };
 
   const confirmarLogout = () => {
@@ -187,6 +211,17 @@ export function SettingsScreen() {
             : 'Não foi possível sincronizar — tentaremos de novo em breve'}
         </Text>
       )}
+      <Pressable
+        style={styles.linkForcarResync}
+        onPress={forcarAtualizacaoCompleta}
+        disabled={forcandoResync || sincronizando}
+      >
+        {forcandoResync ? (
+          <ActivityIndicator color={colors.textSecondary} />
+        ) : (
+          <Text style={styles.linkForcarResyncTexto}>Categorias ou tarefas desatualizadas? Forçar atualização completa</Text>
+        )}
+      </Pressable>
 
       <Text style={styles.secao}>Aparência</Text>
       <View style={styles.linhaTema}>
@@ -322,6 +357,18 @@ function criarEstilos(colors: Paleta) {
   },
   textoStatusSyncErro: {
     color: colors.danger,
+  },
+  linkForcarResync: {
+    marginTop: 10,
+    marginHorizontal: 16,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  linkForcarResyncTexto: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   textoVersao: {
     fontFamily: fonts.regular,

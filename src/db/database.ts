@@ -25,7 +25,7 @@ let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
  * zero (ver sincronizar() em sync.ts) — o arquivo antigo nunca é apagado
  * por essa função, só movido, então não há risco de perda de dado.
  */
-async function migrarBancoUnicoSeNecessario(usuarioId: string): Promise<void> {
+async function migrarBancoUnicoSeNecessario(usuarioId: string): Promise<boolean> {
   try {
     const antigo = `${SQLite.defaultDatabaseDirectory}avia.db`;
     const novo = `${SQLite.defaultDatabaseDirectory}avia_${usuarioId}.db`;
@@ -35,9 +35,12 @@ async function migrarBancoUnicoSeNecessario(usuarioId: string): Promise<void> {
     ]);
     if (infoAntigo.exists && !infoNovo.exists) {
       await FileSystem.moveAsync({ from: antigo, to: novo });
+      return true;
     }
+    return false;
   } catch {
     // Ver comentário acima — nunca bloqueia a abertura do banco por-conta.
+    return false;
   }
 }
 
@@ -91,8 +94,8 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     const usuarioId = usuarioAtivoId;
     dbPromise = migrarBancoUnicoSeNecessario(usuarioId)
-      .then(() => SQLite.openDatabaseAsync(`avia_${usuarioId}.db`))
-      .then(async (db) => {
+      .then((migrado) => SQLite.openDatabaseAsync(`avia_${usuarioId}.db`).then((db) => ({ db, migrado })))
+      .then(async ({ db, migrado }) => {
       dbAtual = db;
       await db.execAsync(`
         CREATE TABLE IF NOT EXISTS items (
@@ -185,6 +188,22 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
       await adicionarColunaSeNaoExistir(db, 'items', 'recorrencia_gerada_ate', 'TEXT');
       // Migração: anotação livre do item (caixinha de notas na edição).
       await adicionarColunaSeNaoExistir(db, 'items', 'notas', 'TEXT');
+
+      if (migrado) {
+        // Acabamos de renomear o arquivo único antigo (avia.db) pra este —
+        // o cursor de sincronização que veio junto reflete a última vez que
+        // ESTE aparelho sincronizou antes desta atualização, que pode ser
+        // bem anterior a mudanças feitas no servidor nesse meio-tempo (ex.:
+        // a redução de categorias). Um pull incremental a partir desse
+        // cursor antigo pode nunca alcançar tudo; zera os cursores uma
+        // única vez pra forçar um pull completo, igual uma conta nova faria.
+        await db.runAsync(
+          `INSERT OR REPLACE INTO sync_meta (chave, valor) VALUES
+           ('ultimaSincronizacao', ''),
+           ('ultimaSincronizacaoCategorias', ''),
+           ('ultimaSincronizacaoCompartilhamentos', '')`,
+        );
+      }
       return db;
     });
   }
