@@ -75,9 +75,6 @@ export function CategoriasScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.linhaSecaoComBotao}>
         <Text style={styles.secaoSemPadding}>Categorias</Text>
-        <Pressable onPress={() => abrirEdicao(null)}>
-          <Text style={styles.linkNova}>+ Nova categoria</Text>
-        </Pressable>
       </View>
       <FlatList
         data={categorias}

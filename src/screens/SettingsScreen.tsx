@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
@@ -89,6 +89,7 @@ export function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.secao}>Conta</Text>
       <View style={styles.linhaConta}>
         <View style={styles.linhaContaComAvatar}>
@@ -241,6 +242,7 @@ export function SettingsScreen() {
 
         <Text style={styles.textoVersao}>Versão {Constants.expoConfig?.version ?? '—'}</Text>
       </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -248,6 +250,7 @@ export function SettingsScreen() {
 function criarEstilos(colors: Paleta) {
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  scroll: { paddingBottom: 40 },
   secao: {
     fontFamily: fonts.bold,
     fontSize: 13,

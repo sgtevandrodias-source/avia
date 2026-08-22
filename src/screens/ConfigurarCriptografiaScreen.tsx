@@ -8,6 +8,7 @@ import { useItems } from '../context/ItemsContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
+import { aguardarProximoFrame } from '../utils/aguardarProximoFrame';
 import { avisar } from '../utils/confirm';
 
 const TAMANHO_MINIMO_SENHA = 8;
@@ -40,6 +41,7 @@ export function ConfigurarCriptografiaScreen() {
     }
     setProcessando(true);
     try {
+      await aguardarProximoFrame();
       const codigo = await configurarCriptografia(fraseSenha);
       setCodigoRecuperacao(codigo);
       setPasso('recuperacao');

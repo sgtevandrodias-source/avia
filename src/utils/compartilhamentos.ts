@@ -27,7 +27,7 @@ export function itemDeCompartilhamento(c: ItemCompartilhadoLocal): Item {
     recorrenciaGeradaAte: null,
     notas: c.notas,
     criadoEm: c.atualizadoEm,
-    concluidoEm: null,
+    concluidoEm: c.concluidoPeloDestinatario ? c.atualizadoEm : null,
     atualizadoEm: c.atualizadoEm,
     somenteLeitura: true,
     compartilhamentoId: c.id,

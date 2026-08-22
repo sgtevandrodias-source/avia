@@ -7,6 +7,7 @@ import { useItems } from '../context/ItemsContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
+import { aguardarProximoFrame } from '../utils/aguardarProximoFrame';
 import { avisar } from '../utils/confirm';
 
 export function DesbloquearCriptografiaScreen() {
@@ -23,6 +24,7 @@ export function DesbloquearCriptografiaScreen() {
     if (!segredo.trim()) return;
     setProcessando(true);
     try {
+      await aguardarProximoFrame();
       const ok = await desbloquearCriptografia(segredo.trim());
       if (!ok) {
         avisar('Não bateu', 'Essa frase secreta ou código de recuperação não confere. Tente de novo.');
