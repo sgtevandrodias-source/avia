@@ -12,6 +12,7 @@ import { AtrasadosScreen } from '../screens/AtrasadosScreen';
 import { CalendarioScreen } from '../screens/CalendarioScreen';
 import { HistoricoScreen } from '../screens/HistoricoScreen';
 import { CategoriasScreen } from '../screens/CategoriasScreen';
+import { ItensDaCategoriaScreen } from '../screens/ItensDaCategoriaScreen';
 import { CompartilhadosScreen } from '../screens/CompartilhadosScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
@@ -241,6 +242,15 @@ export function RootNavigator() {
           headerStyle: { backgroundColor: colors.surface },
           headerTitleStyle: { fontFamily: fonts.bold },
         }}
+      />
+      <Stack.Screen
+        name="ItensDaCategoria"
+        component={ItensDaCategoriaScreen}
+        options={({ route }: any) => ({
+          title: route.params?.categoriaNome ?? 'Categoria',
+          headerStyle: { backgroundColor: colors.surface },
+          headerTitleStyle: { fontFamily: fonts.bold },
+        })}
       />
     </Stack.Navigator>
   );

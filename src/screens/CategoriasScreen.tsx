@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useItems } from '../context/ItemsContext';
 import { useCategorias } from '../context/CategoriasContext';
 import { useTheme } from '../theme/ThemeContext';
@@ -29,6 +30,7 @@ interface EditorEstado {
 export function CategoriasScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => criarEstilos(colors), [colors]);
+  const navigation = useNavigation<any>();
   const { categorias, adicionarCategoria, editarCategoria, removerCategoria } = useCategorias();
   const { itens, editarItem } = useItems();
   const [editor, setEditor] = useState<EditorEstado | null>(null);
@@ -76,12 +78,23 @@ export function CategoriasScreen() {
       <View style={styles.linhaSecaoComBotao}>
         <Text style={styles.secaoSemPadding}>Categorias</Text>
       </View>
+      <Text style={styles.dica}>Toque pra ver as tarefas · segure pra editar ícone e cor</Text>
       <FlatList
         data={categorias}
         keyExtractor={(c) => c.id}
         contentContainerStyle={styles.lista}
         renderItem={({ item }) => (
-          <Pressable style={styles.linha} onPress={() => abrirEdicao(item)}>
+          <Pressable
+            style={styles.linha}
+            onPress={() =>
+              navigation.navigate('ItensDaCategoria', {
+                categoriaId: item.id,
+                categoriaNome: item.nome,
+                categoriaCor: item.cor,
+              })
+            }
+            onLongPress={() => abrirEdicao(item)}
+          >
             <View style={[styles.bolinha, { backgroundColor: item.cor }]} />
             <Text style={styles.icone}>{item.icone}</Text>
             <Text style={styles.nome}>{item.nome}</Text>
@@ -151,7 +164,13 @@ function criarEstilos(colors: Paleta) {
     color: colors.textSecondary,
     textTransform: 'uppercase',
   },
-  linkNova: { fontFamily: fonts.medium, fontSize: 13, color: colors.urgentHoje },
+  dica: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
   lista: { paddingHorizontal: 16 },
   linha: {
     flexDirection: 'row',
