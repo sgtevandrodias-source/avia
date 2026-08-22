@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { CategoriasProvider } from './src/context/CategoriasContext';
 import { CompartilhamentosProvider } from './src/context/CompartilhamentosContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { SplashAnimado } from './src/components/SplashAnimado';
 import { useAviaFonts } from './src/theme/typography';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { configurarCanalAndroid, solicitarPermissaoNotificacoes } from './src/notifications/notifications';
@@ -46,6 +47,11 @@ function BarraDeStatus() {
 
 export default function App() {
   const [fontesCarregadas] = useAviaFonts();
+  // Splash animado (ver SplashAnimado.tsx) fica por cima do app um instante
+  // fixo na abertura — o resto do app (AuthProvider etc.) já monta e carrega
+  // em paralelo por baixo, então quando o splash termina de desvanecer o
+  // conteúdo real já está pronto, sem espera adicional.
+  const [mostrarSplashAnimado, setMostrarSplashAnimado] = useState(true);
 
   useEffect(() => {
     configurarCanalAndroid();
@@ -78,6 +84,9 @@ export default function App() {
             <Conteudo />
           </AuthProvider>
           <BarraDeStatus />
+          {mostrarSplashAnimado && (
+            <SplashAnimado aoTerminar={() => setMostrarSplashAnimado(false)} />
+          )}
         </SafeAreaProvider>
       </ThemeProvider>
     </GestureHandlerRootView>

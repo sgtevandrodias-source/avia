@@ -273,7 +273,7 @@ export function SettingsScreen() {
         </Pressable>
         <Text style={styles.textoContato}>Feedback: {EMAIL_CONTATO}</Text>
 
-        <Text style={styles.textoVersao}>Versão {Constants.expoConfig?.version ?? '—'}</Text>
+        <Text style={styles.textoVersao}>Desenvolvido por Evandro Dias · Versão {Constants.expoConfig?.version ?? '—'}</Text>
       </View>
       </ScrollView>
     </SafeAreaView>
