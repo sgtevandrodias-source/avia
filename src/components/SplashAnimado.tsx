@@ -83,7 +83,7 @@ export function SplashAnimado({ aoTerminar }: Props) {
         resizeMode="contain"
       />
       <Animated.Text style={[styles.frase, { opacity: opacidadeFrase }]}>
-        faça o que tem que ser Feito!
+        Faça o que tem que ser Feito!
       </Animated.Text>
     </Animated.View>
   );
