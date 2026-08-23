@@ -15,6 +15,17 @@ import { dataHoraLimiteDoItem } from '../utils/periodos';
 import { confirmar } from '../utils/confirm';
 import { categoriaInfo, type Item } from '../types/item';
 
+// Cor fixa (não muda entre tema claro/escuro, igual as cores de urgência)
+// do NOME da categoria na lista de tarefas — só as 4 categorias fixas do
+// sistema têm uma cor de identidade própria aqui; qualquer outra (custom
+// do usuário, ou o sentinela de item compartilhado) cai no cinza padrão.
+const COR_NOME_CATEGORIA: Record<string, string> = {
+  trabalho: '#4C9AFF',
+  pessoal: '#2ECC71',
+  aniversario: '#B084F5',
+  outro: '#FFC107',
+};
+
 interface Props {
   item: Item;
   corPendente: string;
@@ -110,7 +121,15 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           {titulo}
         </Text>
         <View style={styles.linhaMeta}>
-          <Text style={styles.categoria}>
+          <Text
+            style={[
+              styles.categoria,
+              COR_NOME_CATEGORIA[item.categoria] && {
+                fontFamily: fonts.bold,
+                color: COR_NOME_CATEGORIA[item.categoria],
+              },
+            ]}
+          >
             {categoria.icone} {categoria.nome}
           </Text>
           <Text style={[styles.horario, atrasado && styles.horarioAtrasado]}>{dataFormatada}</Text>
