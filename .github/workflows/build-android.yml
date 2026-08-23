@@ -1,0 +1,56 @@
+name: Build Android APK
+
+# Disparado manualmente (aba Actions do GitHub > este workflow > "Run workflow")
+# -- roda o build LOCAL do EAS (eas build --local) num runner Linux gratuito do
+# GitHub em vez da nuvem paga da Expo, contornando a cota mensal do plano
+# free. Só funciona em macOS/Linux (não no Windows), por isso não dá pra
+# rodar isso direto no PC -- daí o CI.
+#
+# Segredos necessários no repositório (Settings > Secrets and variables >
+# Actions), configurados uma única vez:
+#   EXPO_TOKEN                 -- token de acesso da conta Expo (criado em
+#                                 https://expo.dev/accounts/<conta>/settings/access-tokens)
+#   GOOGLE_SERVICES_JSON_BASE64 -- conteúdo de google-services.json em base64
+#                                 (build local não busca variáveis de ambiente
+#                                 "Secret" da EAS, só builds na nuvem fazem
+#                                 isso -- por isso esse arquivo é injetado
+#                                 direto aqui, não pela env var GOOGLE_SERVICES_JSON
+#                                 já usada nos builds normais)
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Recriar google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > google-services.json
+
+      - name: Build Android (local, via EAS)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli build --platform android --profile preview --local --non-interactive --output avia.apk
+
+      - name: Publicar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: avia-apk
+          path: avia.apk
