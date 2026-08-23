@@ -1,0 +1,65 @@
+# .easignore substitui o .gitignore por completo pra decidir o que entra
+# no pacote que o EAS Build usa (nuvem OU --local) -- por isso repete as
+# MESMAS regras do .gitignore abaixo, com uma exceção no final: precisamos
+# que google-services.json entre no pacote do build (nossa variável de
+# ambiente da EAS, GOOGLE_SERVICES_JSON, só é injetada em builds de nuvem;
+# em build --local a gente escreve o arquivo localmente antes de rodar o
+# eas-cli, mas ele só chega no build se estiver aqui liberado). A chave de
+# conta de serviço do Firebase (*firebase-adminsdk*.json) continua
+# bloqueada -- essa sim é credencial secreta de verdade, nunca deve entrar
+# em pacote nenhum.
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Cloudflare Workers
+.wrangler/
+
+# Segredos (chave de API do backend — veja src/sync/secrets.example.ts)
+src/sync/secrets.ts
+
+# Firebase (push notifications) — a chave de conta de serviço continua
+# bloqueada; google-services.json é liberado abaixo, no fim do arquivo.
+google-services.json
+*firebase-adminsdk*.json
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# Precisa ser a última regra pra valer (nega a exclusão de cima só pra
+# este arquivo específico).
+!google-services.json
