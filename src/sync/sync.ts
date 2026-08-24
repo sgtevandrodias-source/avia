@@ -238,6 +238,27 @@ export async function forcarResyncCompleto(): Promise<void> {
 }
 
 /**
+ * Apaga TODO o cache local (itens, categorias, compartilhamentos) e refaz a
+ * sincronização do zero — diferente de forcarResyncCompleto (só reseta o
+ * cursor, mantendo o que já estava salvo localmente), isso corrige "itens
+ * fantasma": linhas que ficaram presas no aparelho porque o servidor já não
+ * as considera ativas há muito tempo. Um pull, completo ou incremental,
+ * só informa o que MUDOU — nunca "apaga o que não está mais na resposta" —
+ * então um item que o servidor já tinha excluído antes do cursor atual
+ * nunca é comunicado de volta pro aparelho, e fica preso local pra sempre
+ * (na aba Hoje, inclusive, por causa do rollover de pendentes atrasados).
+ * Sincroniza uma vez ANTES de apagar (empurra qualquer alteração local
+ * ainda não enviada, pra não perder nada de verdade) e outra DEPOIS
+ * (busca tudo de novo com o cache já vazio).
+ */
+export async function limparCacheLocalERessincronizar(): Promise<void> {
+  await sincronizar();
+  await db.limparTudoLocal();
+  await forcarResyncCompleto();
+  await sincronizar();
+}
+
+/**
  * Prepara o SQLite local pra uma sessão que acabou de logar (login/cadastro
  * novo, não troca entre contas já salvas — ver alternarConta em
  * AuthContext.tsx, que usa o cursor incremental já existente da conta em

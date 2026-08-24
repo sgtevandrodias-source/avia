@@ -9,7 +9,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { useItems } from '../context/ItemsContext';
-import { forcarResyncCompleto, obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
+import { limparCacheLocalERessincronizar, obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
 import { useTheme, type PreferenciaTema } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
@@ -57,19 +57,20 @@ export function SettingsScreen() {
   };
 
   // Diferente de "Sincronizar agora" (incremental, a partir do último
-  // cursor salvo): zera os cursores antes de sincronizar, forçando um
-  // pull/push completo — usado quando o cache local desta conta neste
-  // aparelho parece desatualizado (ex.: categorias ou itens que não
-  // batem com o que aparece em outro aparelho/conta) e uma sincronização
-  // normal não resolve.
+  // cursor salvo): apaga TODO o cache local desta conta neste aparelho e
+  // busca tudo de novo do zero — o único jeito de corrigir "itens
+  // fantasma" (algo que o servidor já não considera ativo há muito tempo,
+  // mas que nunca aparece numa resposta de sincronização pra avisar o
+  // aparelho que deveria sumir — nem pull incremental nem completo
+  // "avisam" sobre algo excluído antes do cursor atual).
   const forcarAtualizacaoCompleta = () => {
     confirmar(
       'Forçar atualização completa',
-      'Isso vai baixar tudo de novo do servidor pra esta conta neste aparelho. Pode levar alguns segundos. Continuar?',
+      'Isso vai apagar o cache local desta conta neste aparelho e baixar tudo de novo do servidor. Pode levar alguns segundos. Continuar?',
       async () => {
         setForcandoResync(true);
         try {
-          await forcarResyncCompleto();
+          await limparCacheLocalERessincronizar();
           await sincronizarAgora();
           avisar('Pronto', 'Atualização completa concluída.');
         } finally {

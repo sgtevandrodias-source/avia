@@ -6,6 +6,8 @@ export async function sincronizar(): Promise<{ ok: boolean }> {
 
 export async function forcarResyncCompleto(): Promise<void> {}
 
+export async function limparCacheLocalERessincronizar(): Promise<void> {}
+
 export async function prepararSessaoParaUsuario(): Promise<void> {}
 
 export async function alternarSessaoParaUsuario(): Promise<void> {}
