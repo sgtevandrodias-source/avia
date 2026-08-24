@@ -60,6 +60,11 @@ yarn-error.*
 /ios
 /android
 
+# builds baixados localmente + tokens salvos à mão — nunca devem entrar
+# em pacote nenhum
+*.apk
+aviatoken.txt
+
 # Precisa ser a última regra pra valer (nega a exclusão de cima só pra
 # este arquivo específico).
 !google-services.json

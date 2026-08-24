@@ -51,3 +51,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# builds baixados localmente + tokens salvos à mão — nunca devem entrar
+# em pacote nenhum (git ou build da EAS)
+*.apk
+aviatoken.txt
