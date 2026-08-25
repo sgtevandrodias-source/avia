@@ -133,6 +133,9 @@ export function SettingsScreen() {
       <Pressable style={styles.linkTrocarConta} onPress={() => navigation.navigate('Contas')}>
         <Text style={styles.linkTrocarContaTexto}>Trocar ou adicionar conta neste aparelho</Text>
       </Pressable>
+      <Pressable style={styles.linkExcluirConta} onPress={() => navigation.navigate('ExcluirConta')}>
+        <Text style={styles.linkExcluirContaTexto}>Excluir conta e todos os dados</Text>
+      </Pressable>
 
       <Text style={styles.secao}>Definir senha</Text>
       <View style={styles.cartaoSenha}>
@@ -311,6 +314,8 @@ function criarEstilos(colors: Paleta) {
   linkSair: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger },
   linkTrocarConta: { marginHorizontal: 16, marginTop: 8, paddingVertical: 4 },
   linkTrocarContaTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.urgentHoje },
+  linkExcluirConta: { marginHorizontal: 16, marginTop: 8, paddingVertical: 4 },
+  linkExcluirContaTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger },
   cartaoSenha: {
     marginHorizontal: 16,
     backgroundColor: colors.surface,

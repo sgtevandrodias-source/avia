@@ -1007,8 +1007,50 @@ async function tratarArquivo(
   });
 }
 
+/**
+ * Apaga em cascata TUDO que pertence ao usuário: itens, categorias, séries
+ * recorrentes, envelope de criptografia, tokens de push, catálogo de
+ * arquivo (D1) + os objetos de verdade no R2, compartilhamentos (dos dois
+ * lados — como criador e como destinatário) e por fim a linha em `usuarios`.
+ * Nada aqui é soft-delete: exclusão de conta precisa apagar de verdade, não
+ * só marcar `excluido = 1` (esse padrão é só pra sincronização incremental
+ * entre aparelhos, que não se aplica mais depois que a conta deixa de existir).
+ */
+async function excluirContaCompleta(env: Env, usuarioId: string): Promise<void> {
+  const { results: arquivosRows } = await env.DB.prepare('SELECT r2_key FROM arquivos WHERE usuario_id = ?')
+    .bind(usuarioId)
+    .all<{ r2_key: string }>();
+  if (arquivosRows.length > 0) {
+    await env.ARQUIVO.delete(arquivosRows.map((r) => r.r2_key));
+  }
+
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM items WHERE usuario_id = ?').bind(usuarioId),
+    env.DB.prepare('DELETE FROM categorias WHERE usuario_id = ?').bind(usuarioId),
+    env.DB.prepare('DELETE FROM series_recorrentes WHERE usuario_id = ?').bind(usuarioId),
+    env.DB.prepare('DELETE FROM cifra_usuario WHERE usuario_id = ?').bind(usuarioId),
+    env.DB.prepare('DELETE FROM push_tokens WHERE usuario_id = ?').bind(usuarioId),
+    env.DB.prepare('DELETE FROM arquivos WHERE usuario_id = ?').bind(usuarioId),
+    env.DB.prepare('DELETE FROM compartilhamentos WHERE criador_id = ? OR destinatario_id = ?').bind(usuarioId, usuarioId),
+    env.DB.prepare('DELETE FROM usuarios WHERE id = ?').bind(usuarioId),
+  ]);
+}
+
 /** Define/troca a senha do usuário logado — dá acesso por e-mail+senha (ex.: no site) pra quem entrou via Google. */
 async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota: string | undefined): Promise<Response> {
+  // DELETE /usuario — exclusão definitiva da conta (exigência de política de
+  // dados da Play Store: quem cria conta precisa poder apagá-la de dentro do
+  // app). Bloqueia a conta 'legado', usada pro fallback administrativo via
+  // API_KEY (ver autenticar) — não existe usuário real por trás dela pra
+  // "excluir", e apagar essa linha quebraria esse fallback pra sempre.
+  if (!rota && request.method === 'DELETE') {
+    if (usuarioId === 'legado') {
+      return json({ erro: 'Esta conta não pode ser excluída' }, 403);
+    }
+    await excluirContaCompleta(env, usuarioId);
+    return json({ ok: true });
+  }
+
   if (rota === 'senha' && request.method === 'POST') {
     const { senha } = (await request.json()) as { senha?: string };
     if (!senha || senha.length < 6) {

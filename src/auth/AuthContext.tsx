@@ -52,6 +52,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   alternarConta: (usuarioId: string) => Promise<void>;
   removerConta: (usuarioId: string) => Promise<void>;
+  excluirConta: () => Promise<void>;
   // Criptografia ponta a ponta (opcional) — ver src/crypto/.
   // `null` = ainda não verificou (logo após abrir o app/logar).
   criptografiaConfigurada: boolean | null;
@@ -313,6 +314,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /**
+   * Apaga a conta DE VERDADE — servidor primeiro (item por item, categorias,
+   * compartilhamentos, criptografia, tudo, ver excluirContaCompleta no
+   * Worker), e só depois de confirmado o sucesso é que limpa este aparelho
+   * (removerConta). Nessa ordem: se a chamada ao servidor falhar (rede,
+   * etc.), nada muda localmente e o usuário pode tentar de novo — nunca gera
+   * um estado "esqueci localmente mas os dados continuam vivos no servidor".
+   */
+  const excluirConta = useCallback(async () => {
+    if (!usuario) throw new Error('Sem sessão ativa.');
+    const resposta = await fetch(`${API_URL}/usuario`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${obterTokenAtual()}` },
+    });
+    if (!resposta.ok) {
+      const dados = await resposta.json().catch(() => null);
+      throw new Error(dados?.erro ?? 'Não foi possível excluir a conta.');
+    }
+    await removerConta(usuario.id);
+  }, [usuario, removerConta]);
+
   // "Sair" continua removendo só a conta ativa deste aparelho — se houver
   // outras contas salvas, o app alterna pra uma delas em vez de voltar pra
   // tela de login (ver removerConta acima).
@@ -398,6 +420,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         alternarConta,
         removerConta,
+        excluirConta,
         criptografiaConfigurada,
         criptografiaBloqueada,
         configurarCriptografia,

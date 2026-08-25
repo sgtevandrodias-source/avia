@@ -20,6 +20,7 @@ import { ConfigurarCriptografiaScreen } from '../screens/ConfigurarCriptografiaS
 import { DesbloquearCriptografiaScreen } from '../screens/DesbloquearCriptografiaScreen';
 import { ContasScreen } from '../screens/ContasScreen';
 import { AdicionarContaScreen } from '../screens/AdicionarContaScreen';
+import { ExcluirContaScreen } from '../screens/ExcluirContaScreen';
 import { CriptografiaAvisos } from '../components/CriptografiaAvisos';
 import { Avatar } from '../components/Avatar';
 import { useAuth } from '../auth/AuthContext';
@@ -238,6 +239,16 @@ export function RootNavigator() {
         component={AdicionarContaScreen}
         options={{
           title: 'Adicionar conta',
+          presentation: 'modal',
+          headerStyle: { backgroundColor: colors.surface },
+          headerTitleStyle: { fontFamily: fonts.bold },
+        }}
+      />
+      <Stack.Screen
+        name="ExcluirConta"
+        component={ExcluirContaScreen}
+        options={{
+          title: 'Excluir conta',
           presentation: 'modal',
           headerStyle: { backgroundColor: colors.surface },
           headerTitleStyle: { fontFamily: fonts.bold },
