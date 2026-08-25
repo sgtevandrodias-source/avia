@@ -234,7 +234,20 @@ async function buscarPorId(db: D1Database, id: string, usuarioId: string): Promi
  * exclusiva de gerarOcorrenciasPendentesNoServidor.
  */
 async function sincronizarSerieDaRaiz(db: D1Database, item: ItemApi, usuarioId: string): Promise<void> {
-  if (item.origemRecorrenciaId) return; // não é raiz de série — nada a fazer
+  if (item.origemRecorrenciaId) {
+    // Não é a raiz — é uma ocorrência gerada (a que o usuário normalmente vê
+    // e edita no dia a dia). Mas se ele desligou a recorrência aqui, a
+    // intenção de "parar de repetir" é clara mesmo assim: desativa a série
+    // que essa ocorrência aponta, senão ela nunca é desligada de fato (a
+    // raiz raramente é editada diretamente pelo app).
+    if (item.recorrencia === 'nenhuma') {
+      await db
+        .prepare('UPDATE series_recorrentes SET ativa = 0, atualizado_em = ? WHERE id = ? AND usuario_id = ?')
+        .bind(new Date().toISOString(), item.origemRecorrenciaId, usuarioId)
+        .run();
+    }
+    return;
+  }
 
   if (item.recorrencia === 'nenhuma') {
     await db
