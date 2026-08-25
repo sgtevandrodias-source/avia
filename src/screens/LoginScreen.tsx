@@ -15,6 +15,7 @@ import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
+import { avisar } from '../utils/confirm';
 
 interface Props {
   // Chamado só quando a operação deu certo — omitido na tela de login raiz
@@ -51,6 +52,17 @@ export function LoginScreen({ aoConcluir }: Props = {}) {
   };
 
   const entrarComGoogle = async () => {
+    // Sem módulo nativo no navegador, esse botão não consegue mesmo abrir o
+    // login do Google aqui — em vez de só ficar desabilitado (que deixa a
+    // pessoa sem saber o porquê nem o que fazer), explica o caminho na hora
+    // que ela tenta usar: definir uma senha dentro do app primeiro.
+    if (!googleDisponivel) {
+      avisar(
+        'Google só funciona no app',
+        'Pra entrar aqui pelo navegador com uma conta que usa login do Google, abra o app no celular, vá em Configurações e toque em "Salvar senha". Depois é só entrar aqui com esse e-mail e essa senha.',
+      );
+      return;
+    }
     setEnviando(true);
     try {
       await loginComGoogle();
@@ -121,12 +133,12 @@ export function LoginScreen({ aoConcluir }: Props = {}) {
         <Pressable
           style={[styles.botaoGoogle, !googleDisponivel && styles.botaoDesabilitado]}
           onPress={entrarComGoogle}
-          disabled={enviando || !googleDisponivel}
+          disabled={enviando}
         >
           <Text style={styles.botaoGoogleTexto}>Continuar com Google</Text>
         </Pressable>
         {!googleDisponivel && (
-          <Text style={styles.avisoGoogle}>Disponível só no app instalado no Android.</Text>
+          <Text style={styles.avisoGoogle}>Disponível só no app instalado no Android — toque pra saber como entrar aqui.</Text>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
