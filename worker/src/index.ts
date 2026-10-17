@@ -2,6 +2,7 @@ import { criarJwt, hashSenha, verificarGoogleIdToken, verificarJwt, verificarSen
 import { semearCategoriasPadrao } from './categoriasPadrao';
 import { gerarOcorrenciasPendentesNoServidor } from './recorrencia';
 import { arquivarItensAntigos } from './arquivamento';
+import { apagarPensamentosDaConta, tratarPensamentos } from './pensamentos';
 
 export interface Env {
   DB: D1Database;
@@ -700,6 +701,10 @@ async function enviarPush(
   titulo: string,
   corpo: string,
   compartilhamentoId: string,
+  // Só os registros do "Avia que alivia!" passam outro tipo (ver
+  // pensamentos.ts) — todas as chamadas já existentes continuam com o
+  // padrão 'compartilhamento', exatamente como antes.
+  tipo: string = 'compartilhamento',
 ): Promise<void> {
   try {
     const { results } = await db
@@ -716,7 +721,7 @@ async function enviarPush(
       // toque — sincroniza e navega pra tela Compartilhados (ver
       // CompartilhamentosContext.tsx) — serve igual bem pra "convite novo"
       // e pra "item concluído pelo criador".
-      data: { tipo: 'compartilhamento', compartilhamentoId },
+      data: { tipo, compartilhamentoId },
     }));
 
     await fetch('https://exp.host/--/api/v2/push/send', {
@@ -1024,6 +1029,9 @@ async function excluirContaCompleta(env: Env, usuarioId: string): Promise<void> 
     await env.ARQUIVO.delete(arquivosRows.map((r) => r.r2_key));
   }
 
+  // Registros e compartilhamentos do "Avia que alivia!" (ver pensamentos.ts).
+  await apagarPensamentosDaConta(env.DB, usuarioId);
+
   await env.DB.batch([
     env.DB.prepare('DELETE FROM items WHERE usuario_id = ?').bind(usuarioId),
     env.DB.prepare('DELETE FROM categorias WHERE usuario_id = ?').bind(usuarioId),
@@ -1166,6 +1174,11 @@ export default {
 
       if (partes[0] === 'arquivo') {
         return await tratarArquivo(request, env, usuarioId, partes[1]);
+      }
+
+      // "Avia que alivia!" — rotas novas, isoladas em pensamentos.ts.
+      if (partes[0] === 'pensamentos' || partes[0] === 'pensamentos-compartilhados') {
+        return await tratarPensamentos(request, env, usuarioId, partes, url, { json, enviarPush });
       }
 
       if (partes[0] !== 'items') {

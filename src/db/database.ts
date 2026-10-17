@@ -210,6 +210,15 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
   return dbPromise;
 }
 
+/**
+ * Acesso ao arquivo SQLite da conta ativa pra módulos com tabelas próprias
+ * (hoje só o "Avia que alivia!", ver src/alivia/armazenamento.ts) — eles
+ * criam e gerenciam as próprias tabelas, sem mexer na inicialização acima.
+ */
+export function obterBancoLocal(): Promise<SQLite.SQLiteDatabase> {
+  return getDb();
+}
+
 interface ItemRow {
   id: string;
   texto_original: string;

@@ -17,6 +17,10 @@ interface Props {
   // demais telas mostra só o título simples (ver melhoria de UI pedida).
   saudacao?: boolean;
   cor?: string;
+  // "Avia que alivia!": título na cor da marca e sem a lupa — a busca do
+  // TopBar procura TAREFAS, e essa área tem a própria busca de registros.
+  destaque?: boolean;
+  semBusca?: boolean;
 }
 
 // Sem acento e sem caixa, pra "aniversario" achar "Aniversário".
@@ -75,7 +79,7 @@ function useSaudacaoAjustada(texto: string) {
   };
 }
 
-export function TopBar({ titulo, saudacao, cor }: Props) {
+export function TopBar({ titulo, saudacao, cor, destaque, semBusca }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => criarEstilos(colors), [colors]);
   const corResolvida = cor ?? colors.border;
@@ -140,22 +144,24 @@ export function TopBar({ titulo, saudacao, cor }: Props) {
             </Text>
           </View>
         ) : (
-          <Text style={styles.texto} numberOfLines={1}>
+          <Text style={[styles.texto, destaque && { color: colors.marca }]} numberOfLines={1}>
             {titulo}
           </Text>
         )}
-        <Pressable
-          onPress={() => (buscaAberta ? fecharBusca() : setBuscaAberta(true))}
-          style={styles.botaoIcone}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={buscaAberta ? 'Fechar busca' : 'Buscar'}
-        >
-          <Ionicons name={buscaAberta ? 'close' : 'search'} size={20} color={colors.textPrimary} />
-        </Pressable>
+        {!semBusca && (
+          <Pressable
+            onPress={() => (buscaAberta ? fecharBusca() : setBuscaAberta(true))}
+            style={styles.botaoIcone}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={buscaAberta ? 'Fechar busca' : 'Buscar'}
+          >
+            <Ionicons name={buscaAberta ? 'close' : 'search'} size={20} color={colors.textPrimary} />
+          </Pressable>
+        )}
       </View>
 
-      {buscaAberta && (
+      {buscaAberta && !semBusca && (
         <View style={styles.buscaContainer}>
           <TextInput
             style={styles.buscaInput}

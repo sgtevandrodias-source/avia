@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
@@ -14,6 +14,7 @@ import { HistoricoScreen } from '../screens/HistoricoScreen';
 import { CategoriasScreen } from '../screens/CategoriasScreen';
 import { ItensDaCategoriaScreen } from '../screens/ItensDaCategoriaScreen';
 import { CompartilhadosScreen } from '../screens/CompartilhadosScreen';
+import { AliviaScreen } from '../screens/AliviaScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
 import { ItemDetailScreen } from '../screens/ItemDetailScreen';
 import { ConfigurarCriptografiaScreen } from '../screens/ConfigurarCriptografiaScreen';
@@ -26,10 +27,12 @@ import { Avatar } from '../components/Avatar';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
+import { useAlivia } from '../context/AliviaContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta, PeriodoKey } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { itensAtrasados } from '../utils/periodos';
+import { useTecladoAberto } from '../utils/useTecladoAberto';
 
 // Configuração do TopBar por rota do Drawer — usada pra renderizar UM único
 // TopBar compartilhado (ver DrawerNavigator abaixo), já que ele agora
@@ -38,9 +41,12 @@ import { itensAtrasados } from '../utils/periodos';
 // dependem do tema ativo — por isso essa config vira uma função chamada
 // dentro do componente (useTheme() só pode ser lido lá), não mais um objeto
 // fixo no escopo do módulo.
-function configTopBar(corPorPeriodo: Record<PeriodoKey, string>): Record<string, { titulo: string; saudacao?: boolean; cor?: string }> {
+function configTopBar(
+  corPorPeriodo: Record<PeriodoKey, string>,
+): Record<string, { titulo: string; saudacao?: boolean; cor?: string; destaque?: boolean; semBusca?: boolean }> {
   return {
     Hoje: { titulo: 'Hoje', saudacao: true, cor: corPorPeriodo.hoje },
+    Alivia: { titulo: 'Avia que alivia!', cor: corPorPeriodo.hoje, destaque: true, semBusca: true },
     Amanha: { titulo: 'Amanhã', cor: corPorPeriodo.amanha },
     Calendario: { titulo: 'Calendário' },
     Atrasados: { titulo: 'Atrasados' },
@@ -59,6 +65,7 @@ const Stack = createNativeStackNavigator();
 // atalho direto de navegação.
 const ITENS_MENU: { rota: string; label: string; icone: string }[] = [
   { rota: 'Hoje', label: 'Hoje', icone: '🔥' },
+  { rota: 'Alivia', label: 'Avia que alivia!', icone: '🌿' },
   { rota: 'Amanha', label: 'Amanhã', icone: '➡️' },
   { rota: 'Calendario', label: 'Calendário', icone: '📅' },
   { rota: 'Atrasados', label: 'Atrasados', icone: '⏰' },
@@ -77,6 +84,7 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
   const { usuario } = useAuth();
   const { itens } = useItems();
   const { recebidos } = useCompartilhamentos();
+  const { quantidadeConvitesPendentes: convitesAlivia } = useAlivia();
   const quantidadeAtrasados = useMemo(() => itensAtrasados(itens).length, [itens]);
   const quantidadeConvitesPendentes = useMemo(
     () => recebidos.filter((c) => c.status === 'pendente').length,
@@ -109,7 +117,9 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
             ? quantidadeAtrasados
             : item.rota === 'Compartilhados'
               ? quantidadeConvitesPendentes
-              : 0;
+              : item.rota === 'Alivia'
+                ? convitesAlivia
+                : 0;
         return (
           <Pressable
             key={item.rota}
@@ -128,26 +138,6 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
       })}
     </DrawerContentScrollView>
   );
-}
-
-// Com o teclado aberto, a área segura de baixo (barra de gestos do iPhone /
-// barra de navegação do Android) fica escondida atrás dele — se a
-// CapturaRapida continuasse reservando esse espaço, sobraria uma faixa vazia
-// entre o campo e o teclado. "will" no iOS (acompanha a animação do
-// teclado); no Android só existem os eventos "did".
-function useTecladoAberto(): boolean {
-  const [aberto, setAberto] = useState(false);
-  useEffect(() => {
-    const eventoMostrar = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const eventoEsconder = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const assinaturaMostrar = Keyboard.addListener(eventoMostrar, () => setAberto(true));
-    const assinaturaEsconder = Keyboard.addListener(eventoEsconder, () => setAberto(false));
-    return () => {
-      assinaturaMostrar.remove();
-      assinaturaEsconder.remove();
-    };
-  }, []);
-  return aberto;
 }
 
 function DrawerNavigator() {
@@ -174,7 +164,13 @@ function DrawerNavigator() {
           Drawer) — usa abrirDrawer(), que alcança o Drawer de fora via o ref
           do NavigationContainer (ver navigationRef.ts). */}
       <SafeAreaView edges={['top']} style={{ backgroundColor: colors.surface }}>
-        <TopBar titulo={configTopo.titulo} saudacao={configTopo.saudacao} cor={configTopo.cor} />
+        <TopBar
+          titulo={configTopo.titulo}
+          saudacao={configTopo.saudacao}
+          cor={configTopo.cor}
+          destaque={configTopo.destaque}
+          semBusca={configTopo.semBusca}
+        />
         <CriptografiaAvisos />
       </SafeAreaView>
       {/* Recomendação do Expo pra teclado: "padding" no iOS; no Android o
@@ -203,6 +199,7 @@ function DrawerNavigator() {
             }}
           >
             <Drawer.Screen name="Hoje" component={HojeScreen} />
+            <Drawer.Screen name="Alivia" component={AliviaScreen} />
             <Drawer.Screen name="Amanha" component={AmanhaScreen} />
             <Drawer.Screen name="Calendario" component={CalendarioScreen} />
             <Drawer.Screen name="Atrasados" component={AtrasadosScreen} />
@@ -212,9 +209,14 @@ function DrawerNavigator() {
             <Drawer.Screen name="Config" component={SettingsScreen} />
           </Drawer.Navigator>
         </View>
-        <View style={{ backgroundColor: colors.surface, paddingBottom: tecladoAberto ? 0 : insets.bottom }}>
-          <CapturaRapida />
-        </View>
+        {/* No "Avia que alivia!" o campo de TAREFAS some (a tela tem o próprio
+            campo de registro no rodapé, ver AliviaScreen) — evita criar uma
+            tarefa por engano quando a intenção era registrar um pensamento. */}
+        {rotaAtiva !== 'Alivia' && (
+          <View style={{ backgroundColor: colors.surface, paddingBottom: tecladoAberto ? 0 : insets.bottom }}>
+            <CapturaRapida />
+          </View>
+        )}
       </KeyboardAvoidingView>
     </View>
   );

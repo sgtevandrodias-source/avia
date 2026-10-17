@@ -9,6 +9,7 @@ import { navigationRef } from './src/navigation/navigationRef';
 import { ItemsProvider } from './src/context/ItemsContext';
 import { CategoriasProvider } from './src/context/CategoriasContext';
 import { CompartilhamentosProvider } from './src/context/CompartilhamentosContext';
+import { AliviaProvider } from './src/context/AliviaContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { SplashAnimado } from './src/components/SplashAnimado';
@@ -28,9 +29,11 @@ function Conteudo() {
       {usuario ? (
         <CategoriasProvider>
           <CompartilhamentosProvider>
-            <ItemsProvider>
-              <RootNavigator />
-            </ItemsProvider>
+            <AliviaProvider>
+              <ItemsProvider>
+                <RootNavigator />
+              </ItemsProvider>
+            </AliviaProvider>
           </CompartilhamentosProvider>
         </CategoriasProvider>
       ) : (
