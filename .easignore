@@ -65,6 +65,10 @@ yarn-error.*
 *.apk
 aviatoken.txt
 
+# Backups do D1 (wrangler d1 export) — têm os dados de TODOS os usuários;
+# nunca podem ir pro Git nem pro pacote do build.
+backup-*.sql
+
 # Precisa ser a última regra pra valer (nega a exclusão de cima só pra
 # este arquivo específico).
 !google-services.json
