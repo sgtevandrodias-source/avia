@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, View } from 'react-native';
+import { COR_MARCA } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 
 // Splash "de verdade" mostrado em JS, por cima do resto do app — o splash
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontFamily: fonts.extraBold,
     fontSize: 16,
-    color: '#FF5C33',
+    color: COR_MARCA,
     letterSpacing: 0.2,
   },
 });

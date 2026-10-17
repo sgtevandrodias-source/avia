@@ -3,7 +3,16 @@
 // Duas paletas (clara/escura) com as MESMAS chaves — ver ThemeContext.tsx,
 // que escolhe qual delas expor via useTheme() conforme a preferência do
 // usuário (ou o tema do sistema).
+
+// Laranja da identidade visual do Avia (título "Avia", frase do splash,
+// ícone do app) — fonte única pra essa cor; as paletas abaixo derivam dela.
+export const COR_MARCA = '#FF5C33';
+
 export interface Paleta {
+  // Cor da marca nesse esquema (clara usa COR_MARCA; escura, um tom um pouco
+  // mais claro pra manter o contraste sobre fundo escuro).
+  marca: string;
+
   background: string;
   surface: string;
   border: string;
@@ -28,6 +37,8 @@ export interface Paleta {
 }
 
 export const paletaClara: Paleta = {
+  marca: COR_MARCA,
+
   background: '#FAFAFA',
   surface: '#FFFFFF',
   border: '#ECECEC',
@@ -57,6 +68,8 @@ export const paletaClara: Paleta = {
 // priority) ficam praticamente as mesmas — já são saturadas o bastante pra
 // continuar legíveis sobre fundo escuro.
 export const paletaEscura: Paleta = {
+  marca: '#FF6A42',
+
   background: '#121212',
   surface: '#1E1E1E',
   border: '#2C2C2C',

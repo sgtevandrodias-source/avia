@@ -227,7 +227,7 @@ function criarEstilos(colors: Paleta) {
   },
   saudacaoTexto: {
     fontFamily: fonts.extraBold,
-    color: colors.textPrimary,
+    color: colors.marca,
   },
   medidorInvisivel: {
     position: 'absolute',
