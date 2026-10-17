@@ -53,7 +53,7 @@ export function PeriodoScreen({ periodo }: Props) {
   const feitosHoje = itensFeitosHoje(todosOsItens).length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       {periodo === 'hoje' && <ProgressoDoDia feitos={feitosHoje} total={totalHoje} />}
       <FlatList
         data={itensPeriodo}

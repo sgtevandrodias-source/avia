@@ -74,7 +74,7 @@ export function CategoriasScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <View style={styles.linhaSecaoComBotao}>
         <Text style={styles.secaoSemPadding}>Categorias</Text>
       </View>

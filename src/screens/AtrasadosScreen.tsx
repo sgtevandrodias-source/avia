@@ -21,7 +21,7 @@ export function AtrasadosScreen() {
   const lista = useMemo(() => itensAtrasados(itens), [itens]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <FlatList
         data={lista}
         keyExtractor={(item: Item) => item.id}

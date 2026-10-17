@@ -113,7 +113,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.secao}>Conta</Text>
       <View style={styles.linhaConta}>

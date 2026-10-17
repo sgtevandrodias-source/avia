@@ -272,7 +272,9 @@ function criarEstilos(colors: Paleta) {
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    // Fica no rodapé da tela (ver DrawerNavigator) — a linha divisória é a
+    // de cima, separando o campo do conteúdo da tela.
+    borderTopWidth: 1,
     borderColor: colors.border,
   },
   input: {

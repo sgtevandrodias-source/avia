@@ -37,7 +37,7 @@ export function HistoricoScreen() {
   }, [itens]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <SectionList
         sections={secoes}
         keyExtractor={(item: Item) => item.id}

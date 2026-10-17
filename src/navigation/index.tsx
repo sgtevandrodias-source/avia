@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -130,8 +130,30 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
   );
 }
 
+// Com o teclado aberto, a área segura de baixo (barra de gestos do iPhone /
+// barra de navegação do Android) fica escondida atrás dele — se a
+// CapturaRapida continuasse reservando esse espaço, sobraria uma faixa vazia
+// entre o campo e o teclado. "will" no iOS (acompanha a animação do
+// teclado); no Android só existem os eventos "did".
+function useTecladoAberto(): boolean {
+  const [aberto, setAberto] = useState(false);
+  useEffect(() => {
+    const eventoMostrar = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const eventoEsconder = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const assinaturaMostrar = Keyboard.addListener(eventoMostrar, () => setAberto(true));
+    const assinaturaEsconder = Keyboard.addListener(eventoEsconder, () => setAberto(false));
+    return () => {
+      assinaturaMostrar.remove();
+      assinaturaEsconder.remove();
+    };
+  }, []);
+  return aberto;
+}
+
 function DrawerNavigator() {
   const { colors, corPorPeriodo } = useTheme();
+  const insets = useSafeAreaInsets();
+  const tecladoAberto = useTecladoAberto();
   // Rota ativa do Drawer, pra saber qual título/saudação o TopBar
   // compartilhado abaixo deve mostrar — ver screenListeners no
   // Drawer.Navigator. Começa em "Hoje" (rota inicial do drawer).
@@ -140,51 +162,60 @@ function DrawerNavigator() {
   const configTopo = configuracoesTopBar[rotaAtiva] ?? configuracoesTopBar.Hoje;
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* TopBar (☰ + título/saudação + busca) e CapturaRapida ficam ACIMA do
-          Drawer.Navigator, uma única instância pra cada, compartilhada por
-          toda tela — nunca dentro de uma tela individual. Pra CapturaRapida
-          isso já era assim (antes cada aba de período montava a própria,
-          cada uma reagindo à mesma transcrição de voz/texto de forma
-          independente e criando o mesmo item várias vezes); o TopBar passou
-          a seguir o mesmo padrão pra poder ficar ordenado ACIMA da
-          CapturaRapida (melhoria de UI pedida), o que não seria possível
-          renderizando-o dentro de cada tela (elas vêm depois da
-          CapturaRapida na árvore). Como o TopBar agora está fora da árvore
-          do Drawer, o botão de menu não usa useNavigation().openDrawer()
-          (não teria acesso ao navegador do Drawer) — usa abrirDrawer(), que
-          alcança o Drawer de fora via o ref do NavigationContainer (ver
-          navigationRef.ts). */}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* TopBar (☰ + título/saudação + busca) no topo e CapturaRapida fixa
+          no rodapé (estilo campo de mensagem), uma única instância pra cada,
+          compartilhada por toda tela do Drawer — nunca dentro de uma tela
+          individual (antes cada aba de período montava a própria
+          CapturaRapida, cada uma reagindo à mesma transcrição de voz/texto
+          de forma independente e criando o mesmo item várias vezes). Como o
+          TopBar está fora da árvore do Drawer, o botão de menu não usa
+          useNavigation().openDrawer() (não teria acesso ao navegador do
+          Drawer) — usa abrirDrawer(), que alcança o Drawer de fora via o ref
+          do NavigationContainer (ver navigationRef.ts). */}
       <SafeAreaView edges={['top']} style={{ backgroundColor: colors.surface }}>
         <TopBar titulo={configTopo.titulo} saudacao={configTopo.saudacao} cor={configTopo.cor} />
         <CriptografiaAvisos />
-        <CapturaRapida />
       </SafeAreaView>
-      <Drawer.Navigator
-        drawerContent={(props) => <ConteudoDrawer {...props} />}
-        screenListeners={{
-          state: (e: any) => {
-            const state = e.data.state;
-            const rota = state?.routes?.[state.index]?.name;
-            if (rota) setRotaAtiva(rota);
-          },
-        }}
-        screenOptions={{
-          headerShown: false,
-          drawerType: 'front',
-          overlayColor: 'rgba(0,0,0,0.4)',
-          swipeEnabled: true,
-        }}
-      >
-        <Drawer.Screen name="Hoje" component={HojeScreen} />
-        <Drawer.Screen name="Amanha" component={AmanhaScreen} />
-        <Drawer.Screen name="Calendario" component={CalendarioScreen} />
-        <Drawer.Screen name="Atrasados" component={AtrasadosScreen} />
-        <Drawer.Screen name="Historico" component={HistoricoScreen} />
-        <Drawer.Screen name="Categorias" component={CategoriasScreen} />
-        <Drawer.Screen name="Compartilhados" component={CompartilhadosScreen} />
-        <Drawer.Screen name="Config" component={SettingsScreen} />
-      </Drawer.Navigator>
+      {/* Recomendação do Expo pra teclado: "padding" no iOS; no Android o
+          próprio sistema já redimensiona a janela quando o teclado abre
+          (behavior undefined). Como a CapturaRapida é o último filho desse
+          bloco em coluna, ela sobe junto com o teclado nos dois, e as telas
+          (flex: 1) terminam sempre ACIMA dela — nenhuma lista fica escondida
+          atrás do campo. Por isso as telas do Drawer não reservam mais a
+          área segura de baixo (edges={[]}); quem reserva é o rodapé aqui. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1 }}>
+          <Drawer.Navigator
+            drawerContent={(props) => <ConteudoDrawer {...props} />}
+            screenListeners={{
+              state: (e: any) => {
+                const state = e.data.state;
+                const rota = state?.routes?.[state.index]?.name;
+                if (rota) setRotaAtiva(rota);
+              },
+            }}
+            screenOptions={{
+              headerShown: false,
+              drawerType: 'front',
+              overlayColor: 'rgba(0,0,0,0.4)',
+              swipeEnabled: true,
+            }}
+          >
+            <Drawer.Screen name="Hoje" component={HojeScreen} />
+            <Drawer.Screen name="Amanha" component={AmanhaScreen} />
+            <Drawer.Screen name="Calendario" component={CalendarioScreen} />
+            <Drawer.Screen name="Atrasados" component={AtrasadosScreen} />
+            <Drawer.Screen name="Historico" component={HistoricoScreen} />
+            <Drawer.Screen name="Categorias" component={CategoriasScreen} />
+            <Drawer.Screen name="Compartilhados" component={CompartilhadosScreen} />
+            <Drawer.Screen name="Config" component={SettingsScreen} />
+          </Drawer.Navigator>
+        </View>
+        <View style={{ backgroundColor: colors.surface, paddingBottom: tecladoAberto ? 0 : insets.bottom }}>
+          <CapturaRapida />
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

@@ -95,7 +95,7 @@ export function CalendarioScreen() {
   const dataSelecionadaObj = parseISO(diaSelecionado);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <View style={styles.navMes}>
         <Pressable onPress={() => setMesAtual((atual) => subMonths(atual, 1))} style={styles.botaoNavMes}>
           <Text style={styles.setaNavMes}>‹</Text>

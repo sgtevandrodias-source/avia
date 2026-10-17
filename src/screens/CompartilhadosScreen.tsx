@@ -89,7 +89,7 @@ export function CompartilhadosScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <SectionList
         sections={secoes}
         keyExtractor={(item) => item.id}
