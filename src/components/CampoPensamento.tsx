@@ -42,6 +42,12 @@ export function CampoPensamento({
   const ditandoAquiRef = useRef(false);
   const textoAntesDoDitadoRef = useRef('');
   const escalaPulso = useRef(new Animated.Value(1)).current;
+  const inputRef = useRef<TextInput>(null);
+
+  // Tocou em "Editar": já abre o teclado no campo, com o texto do registro.
+  useEffect(() => {
+    if (editando) inputRef.current?.focus();
+  }, [editando]);
 
   useEffect(() => {
     if (!ouvindo) {
@@ -147,6 +153,7 @@ export function CampoPensamento({
       <View style={styles.wrapper}>
         <View style={styles.inputContainer}>
           <TextInput
+            ref={inputRef}
             style={styles.input}
             placeholder={ouvindo ? 'Ouvindo...' : 'Como você está? Escreva ou fale o que está pensando...'}
             placeholderTextColor={colors.textMuted}

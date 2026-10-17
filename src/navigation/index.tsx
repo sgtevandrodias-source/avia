@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
@@ -173,14 +173,20 @@ function DrawerNavigator() {
         />
         <CriptografiaAvisos />
       </SafeAreaView>
-      {/* Recomendação do Expo pra teclado: "padding" no iOS; no Android o
-          próprio sistema já redimensiona a janela quando o teclado abre
-          (behavior undefined). Como a CapturaRapida é o último filho desse
-          bloco em coluna, ela sobe junto com o teclado nos dois, e as telas
-          (flex: 1) terminam sempre ACIMA dela — nenhuma lista fica escondida
-          atrás do campo. Por isso as telas do Drawer não reservam mais a
-          área segura de baixo (edges={[]}); quem reserva é o rodapé aqui. */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* "padding" nos DOIS sistemas. No Android, o app roda de ponta a
+          ponta (edge-to-edge, obrigatório nesta versão do Expo) e a janela
+          NÃO encolhe quando o teclado abre — com behavior undefined (a
+          recomendação genérica do Expo) o campo do rodapé ficava escondido
+          atrás do teclado, confirmado num aparelho real. O "padding" mede
+          quanto o teclado está realmente cobrindo este bloco, então num
+          aparelho que ainda encolha a janela ele não empurra duas vezes.
+          Como o campo do rodapé (CapturaRapida, ou o campo do "Avia que
+          alivia!") é o último filho desse bloco em coluna, ele sobe junto
+          com o teclado, e as telas (flex: 1) terminam sempre ACIMA dele —
+          nenhuma lista fica escondida atrás do campo. Por isso as telas do
+          Drawer não reservam mais a área segura de baixo (edges={[]}); quem
+          reserva é o rodapé. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={{ flex: 1 }}>
           <Drawer.Navigator
             drawerContent={(props) => <ConteudoDrawer {...props} />}
