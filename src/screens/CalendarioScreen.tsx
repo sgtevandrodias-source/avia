@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
@@ -28,6 +29,15 @@ import type { Item } from '../types/item';
 
 const LETRAS_DIA_SEMANA = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
+// Arrastar o dedo na horizontal sobre o calendário troca de mês (pra
+// esquerda = próximo, pra direita = anterior). Só "pega" o gesto quando ele é
+// claramente horizontal, pra não atrapalhar o toque nos dias nem a rolagem.
+// Usa o react-native-gesture-handler (o mesmo sistema de gestos do menu
+// lateral) em vez do PanResponder do React Native: o PanResponder não
+// recebia o arrasto dentro do Drawer.
+const DISTANCIA_MINIMA_PRA_TROCAR = 60;
+const DURACAO_TROCA_MS = 160;
+
 interface Celula {
   data: Date;
   chave: string; // yyyy-MM-dd
@@ -42,6 +52,58 @@ export function CalendarioScreen() {
   const navigation = useNavigation<any>();
   const [mesAtual, setMesAtual] = useState(() => startOfMonth(new Date()));
   const [diaSelecionado, setDiaSelecionado] = useState(hojeISO());
+  const { width: larguraTela } = useWindowDimensions();
+  const deslocamento = useRef(new Animated.Value(0)).current;
+
+  // Sair do Calendário pra outra tela do menu e voltar deve abrir no mês
+  // de HOJE, não no último mês consultado (as telas do Drawer ficam
+  // montadas, então o estado persistia). Reseta ao SAIR pra outra rota do
+  // menu — e não ao abrir o detalhe de um item (modal por cima): aí, ao
+  // fechar, a pessoa continua no mês que estava olhando.
+  useEffect(
+    () =>
+      navigation.addListener('blur', () => {
+        const estado = navigation.getState();
+        const rotaAtual = estado?.routes?.[estado.index]?.name;
+        if (rotaAtual !== 'Calendario') {
+          setMesAtual(startOfMonth(new Date()));
+          setDiaSelecionado(hojeISO());
+        }
+      }),
+    [navigation],
+  );
+
+  const trocarMes = useCallback(
+    (direcao: 1 | -1) => {
+      // Sai deslizando pro lado do gesto, troca o mês e entra pelo outro lado.
+      Animated.timing(deslocamento, {
+        toValue: -direcao * larguraTela,
+        duration: DURACAO_TROCA_MS,
+        useNativeDriver: true,
+      }).start(() => {
+        setMesAtual((atual) => addMonths(atual, direcao));
+        deslocamento.setValue(direcao * larguraTela);
+        Animated.timing(deslocamento, { toValue: 0, duration: DURACAO_TROCA_MS, useNativeDriver: true }).start();
+      });
+    },
+    [deslocamento, larguraTela],
+  );
+
+  const gestoMes = useMemo(
+    () =>
+      Gesture.Pan()
+        // Callbacks comuns de JS (mexem em estado do React), não worklets.
+        .runOnJS(true)
+        .activeOffsetX([-15, 15])
+        .failOffsetY([-12, 12])
+        .onUpdate((e) => deslocamento.setValue(e.translationX))
+        .onEnd((e) => {
+          if (e.translationX <= -DISTANCIA_MINIMA_PRA_TROCAR) trocarMes(1);
+          else if (e.translationX >= DISTANCIA_MINIMA_PRA_TROCAR) trocarMes(-1);
+          else Animated.spring(deslocamento, { toValue: 0, useNativeDriver: true }).start();
+        }),
+    [deslocamento, trocarMes],
+  );
 
   // Itens compartilhados com a gente e já aceitos entram no calendário junto
   // com os próprios (somenteLeitura: true, ver utils/compartilhamentos.ts).
@@ -96,62 +158,66 @@ export function CalendarioScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
-      <View style={styles.navMes}>
-        <Pressable onPress={() => setMesAtual((atual) => subMonths(atual, 1))} style={styles.botaoNavMes}>
-          <Text style={styles.setaNavMes}>‹</Text>
-        </Pressable>
-        <Text style={styles.tituloMes}>{format(mesAtual, 'MMMM yyyy', { locale: ptBR })}</Text>
-        <Pressable onPress={() => setMesAtual((atual) => addMonths(atual, 1))} style={styles.botaoNavMes}>
-          <Text style={styles.setaNavMes}>›</Text>
-        </Pressable>
-      </View>
+      <GestureDetector gesture={gestoMes}>
+      <View>
+        <View style={styles.navMes}>
+          <Pressable onPress={() => setMesAtual((atual) => subMonths(atual, 1))} style={styles.botaoNavMes}>
+            <Text style={styles.setaNavMes}>‹</Text>
+          </Pressable>
+          <Text style={styles.tituloMes}>{format(mesAtual, 'MMMM yyyy', { locale: ptBR })}</Text>
+          <Pressable onPress={() => setMesAtual((atual) => addMonths(atual, 1))} style={styles.botaoNavMes}>
+            <Text style={styles.setaNavMes}>›</Text>
+          </Pressable>
+        </View>
 
-      <View style={styles.linhaSemana}>
-        {LETRAS_DIA_SEMANA.map((letra, indice) => (
-          <Text key={indice} style={styles.letraDiaSemana}>
-            {letra}
-          </Text>
-        ))}
-      </View>
+        <View style={styles.linhaSemana}>
+          {LETRAS_DIA_SEMANA.map((letra, indice) => (
+            <Text key={indice} style={styles.letraDiaSemana}>
+              {letra}
+            </Text>
+          ))}
+        </View>
 
-      <View style={styles.grade}>
-        {celulas.map((celula) => {
-          const itensDaCelula = itensPorDia.get(celula.chave) ?? [];
-          const temPendente = itensDaCelula.some((i) => i.status === 'pendente');
-          const temItem = itensDaCelula.length > 0;
-          const selecionado = celula.chave === diaSelecionado;
-          return (
-            <Pressable
-              key={celula.chave}
-              style={styles.celula}
-              onPress={() => setDiaSelecionado(celula.chave)}
-            >
-              <View
-                style={[
-                  styles.circuloDia,
-                  selecionado && styles.circuloDiaSelecionado,
-                  !selecionado && isToday(celula.data) && styles.circuloDiaHoje,
-                ]}
+        <Animated.View style={[styles.grade, { transform: [{ translateX: deslocamento }] }]}>
+          {celulas.map((celula) => {
+            const itensDaCelula = itensPorDia.get(celula.chave) ?? [];
+            const temPendente = itensDaCelula.some((i) => i.status === 'pendente');
+            const temItem = itensDaCelula.length > 0;
+            const selecionado = celula.chave === diaSelecionado;
+            return (
+              <Pressable
+                key={celula.chave}
+                style={styles.celula}
+                onPress={() => setDiaSelecionado(celula.chave)}
               >
-                <Text
+                <View
                   style={[
-                    styles.textoDia,
-                    !celula.noMesAtual && styles.textoDiaFora,
-                    selecionado && styles.textoDiaSelecionado,
+                    styles.circuloDia,
+                    selecionado && styles.circuloDiaSelecionado,
+                    !selecionado && isToday(celula.data) && styles.circuloDiaHoje,
                   ]}
                 >
-                  {celula.data.getDate()}
-                </Text>
-              </View>
-              {temItem && (
-                <View
-                  style={[styles.pontoEvento, { backgroundColor: temPendente ? colors.urgentHoje : colors.done }]}
-                />
-              )}
-            </Pressable>
-          );
-        })}
+                  <Text
+                    style={[
+                      styles.textoDia,
+                      !celula.noMesAtual && styles.textoDiaFora,
+                      selecionado && styles.textoDiaSelecionado,
+                    ]}
+                  >
+                    {celula.data.getDate()}
+                  </Text>
+                </View>
+                {temItem && (
+                  <View
+                    style={[styles.pontoEvento, { backgroundColor: temPendente ? colors.urgentHoje : colors.done }]}
+                  />
+                )}
+              </Pressable>
+            );
+          })}
+        </Animated.View>
       </View>
+      </GestureDetector>
 
       <Text style={styles.subtituloLista}>
         {isSameDay(dataSelecionadaObj, new Date())
