@@ -159,7 +159,7 @@ export function CampoPensamento({
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.inputTitulo}
-            placeholder="Título (ex.: A vingança)"
+            placeholder="Ex: Reflexão matinal"
             placeholderTextColor={colors.textMuted}
             value={titulo}
             onChangeText={onChangeTitulo}
