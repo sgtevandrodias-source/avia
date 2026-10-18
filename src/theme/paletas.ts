@@ -1,12 +1,15 @@
-// Paleta AVIA: laranja-avermelhado = urgência/pendente, verde = conclusão.
-// A saturação do laranja cai conforme o horizonte de tempo se distancia de hoje.
+// Paleta AVIA: índigo = marca/pendente, verde = conclusão, vermelho só pra
+// alerta de verdade (atrasado, apagar). O índigo substituiu o laranja (que
+// remetia a comida/urgência) por uma identidade mais calma: lembra das
+// tarefas sem estressar. A intensidade do índigo cai conforme o horizonte de
+// tempo se distancia de hoje (as chaves urgent* mantêm o nome antigo).
 // Duas paletas (clara/escura) com as MESMAS chaves — ver ThemeContext.tsx,
 // que escolhe qual delas expor via useTheme() conforme a preferência do
 // usuário (ou o tema do sistema).
 
-// Laranja da identidade visual do Avia (título "Avia", frase do splash,
+// Índigo da identidade visual do Avia (título "Avia", frase do splash,
 // ícone do app) — fonte única pra essa cor; as paletas abaixo derivam dela.
-export const COR_MARCA = '#FF5C33';
+export const COR_MARCA = '#5B5BD6';
 
 export interface Paleta {
   // Cor da marca nesse esquema (clara usa COR_MARCA; escura, um tom um pouco
@@ -50,10 +53,10 @@ export const paletaClara: Paleta = {
   done: '#2ECC71',
   doneSoft: '#E8F9EF',
 
-  urgentHoje: '#FF5C33',
-  urgentAmanha: '#FF7A52',
-  urgentQuinzena: '#FF9B7A',
-  urgentMes: '#FFC2AC',
+  urgentHoje: COR_MARCA,
+  urgentAmanha: '#7676E0',
+  urgentQuinzena: '#9A9AEA',
+  urgentMes: '#BDBDF3',
 
   danger: '#E64A3B',
   white: '#FFFFFF',
@@ -68,7 +71,7 @@ export const paletaClara: Paleta = {
 // priority) ficam praticamente as mesmas — já são saturadas o bastante pra
 // continuar legíveis sobre fundo escuro.
 export const paletaEscura: Paleta = {
-  marca: '#FF6A42',
+  marca: '#8B8CF0',
 
   background: '#121212',
   surface: '#1E1E1E',
@@ -81,10 +84,10 @@ export const paletaEscura: Paleta = {
   done: '#2ECC71',
   doneSoft: '#16301F',
 
-  urgentHoje: '#FF6A42',
-  urgentAmanha: '#FF8961',
-  urgentQuinzena: '#E0987A',
-  urgentMes: '#8F6B5C',
+  urgentHoje: '#8B8CF0',
+  urgentAmanha: '#7C7DDB',
+  urgentQuinzena: '#6E6FC0',
+  urgentMes: '#55568A',
 
   danger: '#F26355',
   white: '#FFFFFF',
@@ -105,17 +108,17 @@ export function corPorPeriodoDaPaleta(paleta: Paleta): Record<PeriodoKey, string
 }
 
 const CORES_PERIODO_SOFT_CLARO: Record<PeriodoKey, string> = {
-  hoje: '#FFE8E1',
-  amanha: '#FFEEE7',
-  quinzena: '#FFF2EC',
-  mes: '#FFF6F1',
+  hoje: '#ECECFB',
+  amanha: '#F0F0FC',
+  quinzena: '#F4F4FD',
+  mes: '#F7F7FE',
 };
 
 const CORES_PERIODO_SOFT_ESCURO: Record<PeriodoKey, string> = {
-  hoje: '#3A2118',
-  amanha: '#33231C',
-  quinzena: '#2C2420',
-  mes: '#282624',
+  hoje: '#24244A',
+  amanha: '#212140',
+  quinzena: '#1F1F35',
+  mes: '#1C1C2A',
 };
 
 export function corPorPeriodoSoftDaPaleta(esquema: 'claro' | 'escuro'): Record<PeriodoKey, string> {

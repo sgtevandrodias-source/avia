@@ -22,7 +22,7 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "themeColor": "#FF5C33",
+      "themeColor": "#5B5BD6",
       "description": "Organize compromissos e prazos com lembretes automáticos."
     },
     "plugins": [
@@ -41,7 +41,7 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#FF5C33"
+          "color": "#5B5BD6"
         }
       ],
       "expo-secure-store",

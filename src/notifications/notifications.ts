@@ -90,7 +90,7 @@ export function configurarCanalAndroid() {
     Notifications.setNotificationChannelAsync('default', {
       name: 'AVIA',
       importance: Notifications.AndroidImportance.HIGH,
-      lightColor: '#FF5C33',
+      lightColor: '#5B5BD6',
     });
   }
 }
