@@ -16,25 +16,26 @@ export async function listarPensamentos(): Promise<Pensamento[]> {
   // neste navegador: regrava cifrado (mesmo atualizadoEm, ver pensamentos.ts).
   if (obterChaveAtual()) {
     for (const remoto of pensamentos) {
-      if (!estaCifrado(remoto.texto)) enviarPensamento(remoto).catch(() => {});
+      const tituloPuro = !!remoto.titulo && !estaCifrado(remoto.titulo);
+      if (!estaCifrado(remoto.texto) || tituloPuro) enviarPensamento(remoto).catch(() => {});
     }
   }
   ultimaLista = pensamentos.map(paraPensamento).sort((a, b) => b.registradoEm.localeCompare(a.registradoEm));
   return ultimaLista;
 }
 
-export async function criarPensamento(texto: string): Promise<Pensamento> {
+export async function criarPensamento(titulo: string, texto: string): Promise<Pensamento> {
   const agora = new Date().toISOString();
-  const pensamento: Pensamento = { id: Crypto.randomUUID(), texto, registradoEm: agora, atualizadoEm: agora };
+  const pensamento: Pensamento = { id: Crypto.randomUUID(), titulo, texto, registradoEm: agora, atualizadoEm: agora };
   await enviarPensamento(pensamento);
   ultimaLista = [pensamento, ...ultimaLista];
   return pensamento;
 }
 
-export async function editarPensamento(id: string, texto: string): Promise<void> {
+export async function editarPensamento(id: string, titulo: string, texto: string): Promise<void> {
   const atual = ultimaLista.find((p) => p.id === id);
   if (!atual) throw new Error('Registro não encontrado.');
-  const atualizado = { ...atual, texto, atualizadoEm: new Date().toISOString() };
+  const atualizado = { ...atual, titulo, texto, atualizadoEm: new Date().toISOString() };
   await enviarPensamento(atualizado);
   ultimaLista = ultimaLista.map((p) => (p.id === id ? atualizado : p));
 }

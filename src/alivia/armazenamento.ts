@@ -32,6 +32,12 @@ async function banco(): Promise<SQLite.SQLiteDatabase> {
       );
       CREATE INDEX IF NOT EXISTS idx_pensamentos_registrado ON pensamentos(registrado_em);
     `);
+    // Coluna acrescentada na versão com título — aparelhos que já tinham a
+    // tabela (app 1.1.0) ganham a coluna vazia; nada existente é alterado.
+    const colunas = await conexao.getAllAsync<{ name: string }>('PRAGMA table_info(pensamentos)');
+    if (!colunas.some((c) => c.name === 'titulo')) {
+      await conexao.execAsync("ALTER TABLE pensamentos ADD COLUMN titulo TEXT NOT NULL DEFAULT ''");
+    }
     conexoesPreparadas.add(conexao);
   }
   return conexao;
@@ -39,6 +45,7 @@ async function banco(): Promise<SQLite.SQLiteDatabase> {
 
 interface PensamentoRow {
   id: string;
+  titulo: string;
   texto: string;
   registrado_em: string;
   atualizado_em: string;
@@ -50,8 +57,16 @@ function rowParaPensamento(row: PensamentoRow): Pensamento {
   // Decifra na leitura: um registro puxado enquanto o aparelho estava
   // bloqueado fica salvo cifrado e passa a aparecer normal assim que a
   // criptografia é desbloqueada, sem precisar sincronizar de novo.
-  const { texto, bloqueado } = decifrarRecebido(row.texto);
-  return { id: row.id, texto, registradoEm: row.registrado_em, atualizadoEm: row.atualizado_em, bloqueado };
+  const texto = decifrarRecebido(row.texto);
+  const titulo = decifrarRecebido(row.titulo);
+  return {
+    id: row.id,
+    titulo: titulo.texto,
+    texto: texto.texto,
+    registradoEm: row.registrado_em,
+    atualizadoEm: row.atualizado_em,
+    bloqueado: texto.bloqueado || titulo.bloqueado,
+  };
 }
 
 export async function listarPensamentos(): Promise<Pensamento[]> {
@@ -62,23 +77,23 @@ export async function listarPensamentos(): Promise<Pensamento[]> {
   return rows.map(rowParaPensamento);
 }
 
-export async function criarPensamento(texto: string): Promise<Pensamento> {
+export async function criarPensamento(titulo: string, texto: string): Promise<Pensamento> {
   const conexao = await banco();
   const agora = new Date().toISOString();
-  const pensamento: Pensamento = { id: Crypto.randomUUID(), texto, registradoEm: agora, atualizadoEm: agora };
+  const pensamento: Pensamento = { id: Crypto.randomUUID(), titulo, texto, registradoEm: agora, atualizadoEm: agora };
   await conexao.runAsync(
-    `INSERT INTO pensamentos (id, texto, registrado_em, atualizado_em, excluido, pendente_envio)
-     VALUES (?, ?, ?, ?, 0, 1)`,
-    [pensamento.id, texto, agora, agora],
+    `INSERT INTO pensamentos (id, titulo, texto, registrado_em, atualizado_em, excluido, pendente_envio)
+     VALUES (?, ?, ?, ?, ?, 0, 1)`,
+    [pensamento.id, titulo, texto, agora, agora],
   );
   return pensamento;
 }
 
-export async function editarPensamento(id: string, texto: string): Promise<void> {
+export async function editarPensamento(id: string, titulo: string, texto: string): Promise<void> {
   const conexao = await banco();
   await conexao.runAsync(
-    'UPDATE pensamentos SET texto = ?, atualizado_em = ?, pendente_envio = 1 WHERE id = ?',
-    [texto, new Date().toISOString(), id],
+    'UPDATE pensamentos SET titulo = ?, texto = ?, atualizado_em = ?, pendente_envio = 1 WHERE id = ?',
+    [titulo, texto, new Date().toISOString(), id],
   );
 }
 
@@ -97,6 +112,7 @@ async function enviarPendentes(conexao: SQLite.SQLiteDatabase): Promise<void> {
   for (const row of pendentes) {
     await enviarPensamento({
       id: row.id,
+      titulo: row.titulo,
       texto: row.texto,
       registradoEm: row.registrado_em,
       atualizadoEm: row.atualizado_em,
@@ -129,21 +145,32 @@ async function receberAlteracoes(conexao: SQLite.SQLiteDatabase): Promise<void> 
       await conexao.runAsync('DELETE FROM pensamentos WHERE id = ?', [remoto.id]);
       continue;
     }
-    const { texto, bloqueado } = decifrarRecebido(remoto.texto);
+    const tituloRemoto = remoto.titulo ?? '';
+    const texto = decifrarRecebido(remoto.texto);
+    const titulo = decifrarRecebido(tituloRemoto);
     // Registro antigo ainda em texto puro no servidor e este aparelho já
     // tem a chave (a pessoa ativou a criptografia depois) — reenvia cifrado,
     // com o mesmo atualizadoEm (o Worker aceita, ver pensamentos.ts).
-    const precisaCifrar = temChave && !estaCifrado(remoto.texto);
+    const precisaCifrar =
+      temChave && (!estaCifrado(remoto.texto) || (tituloRemoto !== '' && !estaCifrado(tituloRemoto)));
     await conexao.runAsync(
-      `INSERT INTO pensamentos (id, texto, registrado_em, atualizado_em, excluido, pendente_envio)
-       VALUES (?, ?, ?, ?, 0, ?)
+      `INSERT INTO pensamentos (id, titulo, texto, registrado_em, atualizado_em, excluido, pendente_envio)
+       VALUES (?, ?, ?, ?, ?, 0, ?)
        ON CONFLICT(id) DO UPDATE SET
+         titulo = excluded.titulo,
          texto = excluded.texto,
          registrado_em = excluded.registrado_em,
          atualizado_em = excluded.atualizado_em,
          excluido = 0,
          pendente_envio = excluded.pendente_envio`,
-      [remoto.id, bloqueado ? remoto.texto : texto, remoto.registradoEm, remoto.atualizadoEm, precisaCifrar ? 1 : 0],
+      [
+        remoto.id,
+        titulo.bloqueado ? tituloRemoto : titulo.texto,
+        texto.bloqueado ? remoto.texto : texto.texto,
+        remoto.registradoEm,
+        remoto.atualizadoEm,
+        precisaCifrar ? 1 : 0,
+      ],
     );
   }
   await db.setMeta(CHAVE_CURSOR, servidorEm);

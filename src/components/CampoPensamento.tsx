@@ -3,13 +3,15 @@ import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
-import { LIMITE_CARACTERES_PENSAMENTO } from '../alivia/tipos';
+import { LIMITE_CARACTERES_PENSAMENTO, LIMITE_CARACTERES_TITULO } from '../alivia/tipos';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { avisar } from '../utils/confirm';
 
 interface Props {
+  titulo: string;
+  onChangeTitulo: (titulo: string) => void;
   texto: string;
   onChangeTexto: (texto: string) => void;
   onEnviar: () => void;
@@ -28,6 +30,8 @@ interface Props {
  * mesmo quando a pessoa volta pras tarefas.
  */
 export function CampoPensamento({
+  titulo,
+  onChangeTitulo,
   texto,
   onChangeTexto,
   onEnviar,
@@ -128,7 +132,8 @@ export function CampoPensamento({
 
   const quantidade = texto.length;
   const noLimite = quantidade >= LIMITE_CARACTERES_PENSAMENTO;
-  const podeEnviar = texto.trim().length > 0 && !salvando && !desabilitado;
+  // Todo registro tem título (pedido do usuário): sem ele, o botão fica desabilitado.
+  const podeEnviar = titulo.trim().length > 0 && texto.trim().length > 0 && !salvando && !desabilitado;
 
   if (desabilitado) {
     return (
@@ -152,6 +157,19 @@ export function CampoPensamento({
       )}
       <View style={styles.wrapper}>
         <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.inputTitulo}
+            placeholder="Título (ex.: A vingança)"
+            placeholderTextColor={colors.textMuted}
+            value={titulo}
+            onChangeText={onChangeTitulo}
+            maxLength={LIMITE_CARACTERES_TITULO}
+            returnKeyType="next"
+            onSubmitEditing={() => inputRef.current?.focus()}
+            blurOnSubmit={false}
+            accessibilityLabel="Título do registro"
+          />
+          <View style={styles.divisor} />
           <TextInput
             ref={inputRef}
             style={styles.input}
@@ -216,6 +234,18 @@ function criarEstilos(colors: Paleta) {
       paddingHorizontal: 14,
       paddingTop: 10,
       paddingBottom: 4,
+    },
+    inputTitulo: {
+      fontFamily: fonts.bold,
+      fontSize: 15,
+      color: colors.textPrimary,
+      padding: 0,
+      paddingBottom: 6,
+    },
+    divisor: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginBottom: 6,
     },
     input: {
       fontFamily: fonts.regular,

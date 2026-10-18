@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useRoute } from '@react-navigation/native';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useAuth } from '../auth/AuthContext';
 import { CampoPensamento } from '../components/CampoPensamento';
 import { useAlivia } from '../context/AliviaContext';
 import type { Pensamento, PensamentoEnviado, PensamentoRecebido } from '../alivia/tipos';
@@ -55,11 +56,37 @@ function dataHora(iso: string): string {
   return format(parseISO(iso), "dd/MM/yyyy 'às' HH:mm");
 }
 
-/** Texto pro menu de compartilhar do celular (WhatsApp, e-mail...) — do mais antigo pro mais recente. */
-function textoParaCompartilhar(pensamentos: Pensamento[]): string {
+/**
+ * Texto pro menu de compartilhar do celular (WhatsApp, e-mail...), do mais
+ * antigo pro mais recente, no formato de citação pedido:
+ *
+ *   *Título: A vingança*
+ *   17/10/2026 às 19:08
+ *   > "A vingança nunca é plena, mata a alma e envenena"
+ *
+ *   _Feito no Avia, por Fulano._
+ *
+ * No WhatsApp, *...* vira negrito, _..._ itálico e "> " no começo da linha
+ * vira o bloco de citação; em outros apps (e-mail) aparece como texto comum,
+ * ainda legível. Sem o emoji de calendário: em alguns Android ele aparece
+ * como uma folhinha com outra data ("FEB 24"), o que confundia.
+ */
+function textoParaCompartilhar(pensamentos: Pensamento[], autor: string): string {
   const ordenados = [...pensamentos].sort((a, b) => a.registradoEm.localeCompare(b.registradoEm));
-  const blocos = ordenados.map((p) => `📅 ${dataHora(p.registradoEm)}\n${p.texto}`);
-  return `${blocos.join('\n\n')}\n\n— registrado no Avia que alivia!`;
+  const blocos = ordenados.map((p) => {
+    const linhas: string[] = [];
+    if (p.titulo.trim()) linhas.push(`*Título: ${p.titulo.trim()}*`);
+    linhas.push(dataHora(p.registradoEm));
+    // Cada linha do texto precisa do "> " pra citação não se partir no meio.
+    const citacao = `"${p.texto.trim()}"`
+      .split('\n')
+      .map((linha) => `> ${linha}`)
+      .join('\n');
+    linhas.push(citacao);
+    return linhas.join('\n');
+  });
+  const assinatura = autor ? `_Feito no Avia, por ${autor}._` : '_Feito no Avia._';
+  return `${blocos.join('\n\n')}\n\n${assinatura}`;
 }
 
 /** Confirmação com o texto do botão sob medida (o confirmar() padrão usa "Confirmar" em vermelho). */
@@ -80,6 +107,7 @@ export function AliviaScreen() {
   const insets = useSafeAreaInsets();
   const tecladoAberto = useTecladoAberto();
   const route = useRoute<any>();
+  const { usuario } = useAuth();
   const {
     pensamentos,
     enviados,
@@ -97,6 +125,7 @@ export function AliviaScreen() {
 
   const [aba, setAba] = useState<Aba>('meus');
   const [busca, setBusca] = useState('');
+  const [titulo, setTitulo] = useState('');
   const [texto, setTexto] = useState('');
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -121,7 +150,9 @@ export function AliviaScreen() {
   const secoes = useMemo(() => {
     const termo = normalizar(busca.trim());
     const filtrados = termo
-      ? pensamentos.filter((p) => !p.bloqueado && normalizar(p.texto).includes(termo))
+      ? pensamentos.filter(
+          (p) => !p.bloqueado && (normalizar(p.titulo).includes(termo) || normalizar(p.texto).includes(termo)),
+        )
       : pensamentos;
     const grupos = new Map<string, Pensamento[]>();
     for (const p of filtrados) {
@@ -133,15 +164,17 @@ export function AliviaScreen() {
 
   const enviar = async () => {
     const limpo = texto.trim();
-    if (!limpo) return;
+    const tituloLimpo = titulo.trim();
+    if (!limpo || !tituloLimpo) return;
     setSalvando(true);
     try {
       if (editandoId) {
-        await editar(editandoId, limpo);
+        await editar(editandoId, tituloLimpo, limpo);
         setEditandoId(null);
       } else {
-        await criar(limpo);
+        await criar(tituloLimpo, limpo);
       }
+      setTitulo('');
       setTexto('');
     } catch (erro) {
       avisar('Não foi possível salvar', erro instanceof Error ? erro.message : 'Tente de novo.');
@@ -152,12 +185,14 @@ export function AliviaScreen() {
 
   const comecarEdicao = (p: Pensamento) => {
     setEditandoId(p.id);
+    setTitulo(p.titulo);
     setTexto(p.texto);
     setExpandidoId(null);
   };
 
   const cancelarEdicao = () => {
     setEditandoId(null);
+    setTitulo('');
     setTexto('');
   };
 
@@ -199,7 +234,7 @@ export function AliviaScreen() {
   );
 
   const compartilharPeloCelular = async () => {
-    const mensagem = textoParaCompartilhar(pensamentosSelecionados);
+    const mensagem = textoParaCompartilhar(pensamentosSelecionados, usuario?.nome?.trim() ?? '');
     try {
       if (Platform.OS === 'web') {
         const nav = globalThis.navigator as Navigator | undefined;
@@ -290,6 +325,9 @@ export function AliviaScreen() {
           <Text style={styles.cardHora}>{format(parseISO(item.registradoEm), 'HH:mm')}</Text>
           {item.atualizadoEm !== item.registradoEm && <Text style={styles.cardEditado}>· editado</Text>}
         </View>
+        {!item.bloqueado && (
+          <Text style={[styles.cardTitulo, !item.titulo && styles.cardSemTitulo]}>{item.titulo || 'Sem título'}</Text>
+        )}
         <Text style={[styles.cardTexto, item.bloqueado && styles.cardTextoBloqueado]}>
           {item.bloqueado ? '🔒 Registro protegido — desbloqueie a criptografia em Configurações para ler.' : item.texto}
         </Text>
@@ -419,6 +457,8 @@ export function AliviaScreen() {
               </View>
             ) : (
               <CampoPensamento
+                titulo={titulo}
+                onChangeTitulo={setTitulo}
                 texto={texto}
                 onChangeTexto={setTexto}
                 onEnviar={enviar}
@@ -588,6 +628,7 @@ function ListaRecebidos({
                 <Ionicons name="close" size={16} color={colors.textMuted} />
               </Pressable>
             </View>
+            {!!item.titulo && <Text style={styles.cardTitulo}>{item.titulo}</Text>}
             <Text style={styles.cardTexto}>{item.texto}</Text>
           </View>
         )
@@ -684,6 +725,8 @@ function criarEstilos(colors: Paleta) {
     cardHora: { fontFamily: fonts.medium, fontSize: 12, color: colors.textMuted },
     cardEditado: { fontFamily: fonts.regular, fontSize: 12, color: colors.textMuted },
     cardDe: { fontFamily: fonts.bold, fontSize: 12, color: colors.marca },
+    cardTitulo: { fontFamily: fonts.bold, fontSize: 16, color: colors.textPrimary, marginBottom: 4 },
+    cardSemTitulo: { fontFamily: fonts.medium, fontStyle: 'italic', color: colors.textMuted, fontSize: 14 },
     cardTexto: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 21, color: colors.textPrimary },
     cardTextoBloqueado: { color: colors.textMuted, fontSize: 13 },
     cardDica: { fontFamily: fonts.regular, fontSize: 12, color: colors.textSecondary, marginTop: 6 },

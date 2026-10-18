@@ -27,8 +27,8 @@ interface AliviaContextValue {
   // escrever fica desabilitado (o registro iria pro servidor sem cifra).
   escritaBloqueada: boolean;
   recarregar: () => Promise<void>;
-  criar: (texto: string) => Promise<void>;
-  editar: (id: string, texto: string) => Promise<void>;
+  criar: (titulo: string, texto: string) => Promise<void>;
+  editar: (id: string, titulo: string, texto: string) => Promise<void>;
   apagar: (id: string) => Promise<void>;
   compartilharComUsuario: (email: string, pensamentos: Pensamento[]) => Promise<void>;
   responder: (id: string, aceitar: boolean) => Promise<void>;
@@ -116,18 +116,18 @@ export function AliviaProvider({ children }: { children: React.ReactNode }) {
   }, [recarregar, lerCompartilhamentos]);
 
   const criar = useCallback(
-    async (texto: string) => {
-      const novo = await armazenamento.criarPensamento(texto);
+    async (titulo: string, texto: string) => {
+      const novo = await armazenamento.criarPensamento(titulo, texto);
       setPensamentos((lista) => [novo, ...lista]);
       armazenamento.sincronizarPensamentos({ podeEnviar: podeEnviarRef.current });
     },
     [],
   );
 
-  const editar = useCallback(async (id: string, texto: string) => {
-    await armazenamento.editarPensamento(id, texto);
+  const editar = useCallback(async (id: string, titulo: string, texto: string) => {
+    await armazenamento.editarPensamento(id, titulo, texto);
     const agora = new Date().toISOString();
-    setPensamentos((lista) => lista.map((p) => (p.id === id ? { ...p, texto, atualizadoEm: agora } : p)));
+    setPensamentos((lista) => lista.map((p) => (p.id === id ? { ...p, titulo, texto, atualizadoEm: agora } : p)));
     armazenamento.sincronizarPensamentos({ podeEnviar: podeEnviarRef.current });
   }, []);
 

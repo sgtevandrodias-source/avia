@@ -9,6 +9,7 @@ const TIMEOUT_MS = 8000;
 /** Formato trocado com o Worker (POST/GET /pensamentos). */
 export interface PensamentoRemoto {
   id: string;
+  titulo?: string; // ausente no Worker anterior à migração 0019
   texto: string;
   registradoEm: string;
   atualizadoEm: string;
@@ -49,10 +50,10 @@ export async function chamarApiAlivia<T>(caminho: string, opcoes: RequestInit = 
 
 // ---- Criptografia ponta a ponta (mesmo formato/chave dos itens) ----
 
-/** Cifra antes de mandar pro servidor, se este aparelho tiver a chave. Não cifra de novo o que já é cifrado. */
+/** Cifra antes de mandar pro servidor, se este aparelho tiver a chave. Não cifra de novo o que já é cifrado (nem texto vazio). */
 export function cifrarParaEnvio(texto: string): string {
   const chave = obterChaveAtual();
-  if (!chave || estaCifrado(texto)) return texto;
+  if (!chave || !texto || estaCifrado(texto)) return texto;
   return cifrarTexto(texto, chave);
 }
 
@@ -69,15 +70,23 @@ export function decifrarRecebido(texto: string): { texto: string; bloqueado: boo
 }
 
 export function paraPensamento(remoto: PensamentoRemoto): Pensamento {
-  const { texto, bloqueado } = decifrarRecebido(remoto.texto);
-  return { id: remoto.id, texto, registradoEm: remoto.registradoEm, atualizadoEm: remoto.atualizadoEm, bloqueado };
+  const texto = decifrarRecebido(remoto.texto);
+  const titulo = decifrarRecebido(remoto.titulo ?? '');
+  return {
+    id: remoto.id,
+    titulo: titulo.texto,
+    texto: texto.texto,
+    registradoEm: remoto.registradoEm,
+    atualizadoEm: remoto.atualizadoEm,
+    bloqueado: texto.bloqueado || titulo.bloqueado,
+  };
 }
 
 export async function enviarPensamento(p: PensamentoRemoto): Promise<'ok' | 'conflito'> {
   try {
     await chamarApiAlivia('/pensamentos', {
       method: 'POST',
-      body: JSON.stringify({ ...p, texto: cifrarParaEnvio(p.texto) }),
+      body: JSON.stringify({ ...p, titulo: cifrarParaEnvio(p.titulo ?? ''), texto: cifrarParaEnvio(p.texto) }),
     });
     return 'ok';
   } catch (erro) {
@@ -104,7 +113,12 @@ export async function compartilharPensamentos(emailDestinatario: string, pensame
       emailDestinatario,
       // Snapshot em texto puro: quem recebe tem outra chave e não
       // conseguiria ler a versão cifrada (mesmo modelo dos compromissos).
-      registros: pensamentos.map((p) => ({ pensamentoId: p.id, texto: p.texto, registradoEm: p.registradoEm })),
+      registros: pensamentos.map((p) => ({
+        pensamentoId: p.id,
+        titulo: p.titulo,
+        texto: p.texto,
+        registradoEm: p.registradoEm,
+      })),
     }),
   });
 }

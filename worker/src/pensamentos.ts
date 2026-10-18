@@ -23,6 +23,10 @@ export interface DependenciasPensamentos {
 }
 
 const LIMITE_CARACTERES = 500;
+const LIMITE_CARACTERES_TITULO = 60;
+// Mesmo raciocínio de LIMITE_TEXTO_CIFRADO abaixo, pro título (60 caracteres
+// em UTF-8 ocupam no máximo 240 bytes, ~380 em base64).
+const LIMITE_TITULO_CIFRADO = 600;
 // Texto cifrado (AVIA1:<iv>:<cifra> em base64) é bem maior que o texto puro
 // e o servidor não consegue contar os caracteres originais — limita o
 // tamanho do envelope com folga: 500 caracteres em UTF-8 ocupam no máximo
@@ -34,6 +38,7 @@ const MAX_REGISTROS_POR_COMPARTILHAMENTO = 50;
 interface PensamentoRow {
   id: string;
   usuario_id: string;
+  titulo: string;
   texto: string;
   registrado_em: string;
   excluido: number;
@@ -43,6 +48,9 @@ interface PensamentoRow {
 
 interface PensamentoApi {
   id: string;
+  // Opcional na ENTRADA: o app 1.1.0 (antes do título) não manda esse campo
+  // — nesse caso o título já salvo é mantido, nunca apagado.
+  titulo?: string;
   texto: string;
   registradoEm: string;
   atualizadoEm: string;
@@ -56,6 +64,7 @@ interface PensamentoCompartilhadoRow {
   criador_nome: string;
   destinatario_id: string;
   status: string;
+  titulo: string;
   texto: string;
   registrado_em: string;
   excluido: number;
@@ -66,6 +75,7 @@ interface PensamentoCompartilhadoRow {
 function pensamentoParaApi(row: PensamentoRow): PensamentoApi {
   return {
     id: row.id,
+    titulo: row.titulo,
     texto: row.texto,
     registradoEm: row.registrado_em,
     atualizadoEm: row.atualizado_em,
@@ -80,6 +90,16 @@ function textoValido(texto: unknown, permitirCifrado: boolean): texto is string 
   }
   // Array.from conta caracteres de verdade (um emoji = 1), não unidades UTF-16.
   return Array.from(texto).length <= LIMITE_CARACTERES;
+}
+
+/** Título é opcional no servidor (registros antigos não têm); quando vem, respeita o limite. */
+function tituloValido(titulo: unknown, permitirCifrado: boolean): titulo is string | undefined {
+  if (titulo === undefined) return true;
+  if (typeof titulo !== 'string') return false;
+  if (titulo.startsWith(PREFIXO_CIFRA)) {
+    return permitirCifrado && titulo.length <= LIMITE_TITULO_CIFRADO;
+  }
+  return Array.from(titulo).length <= LIMITE_CARACTERES_TITULO;
 }
 
 function dataValida(valor: unknown): valor is string {
@@ -142,6 +162,9 @@ async function rotasPensamentos(
     if (!textoValido(corpo.texto, true)) {
       return json({ erro: `O registro precisa ter entre 1 e ${LIMITE_CARACTERES} caracteres` }, 400);
     }
+    if (!tituloValido(corpo.titulo, true)) {
+      return json({ erro: `O título pode ter até ${LIMITE_CARACTERES_TITULO} caracteres` }, 400);
+    }
 
     const existente = await env.DB.prepare('SELECT * FROM pensamentos WHERE id = ?')
       .bind(corpo.id)
@@ -158,15 +181,25 @@ async function rotasPensamentos(
 
     const excluido = corpo.excluido ? 1 : 0;
     await env.DB.prepare(
-      `INSERT INTO pensamentos (id, usuario_id, texto, registrado_em, excluido, criado_em, atualizado_em)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO pensamentos (id, usuario_id, texto, registrado_em, excluido, criado_em, atualizado_em, titulo)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, COALESCE(?8, ''))
        ON CONFLICT(id) DO UPDATE SET
+         titulo = COALESCE(?8, pensamentos.titulo),
          texto = excluded.texto,
          registrado_em = excluded.registrado_em,
          excluido = excluded.excluido,
          atualizado_em = excluded.atualizado_em`,
     )
-      .bind(corpo.id, usuarioId, corpo.texto, corpo.registradoEm, excluido, new Date().toISOString(), corpo.atualizadoEm)
+      .bind(
+        corpo.id,
+        usuarioId,
+        corpo.texto,
+        corpo.registradoEm,
+        excluido,
+        new Date().toISOString(),
+        corpo.atualizadoEm,
+        corpo.titulo ?? null,
+      )
       .run();
 
     // Apagar um registro desfaz também todos os compartilhamentos dele —
@@ -226,6 +259,7 @@ async function rotasCompartilhados(
         id: c.id,
         criadorNome: c.criador_nome,
         status: c.status,
+        titulo: c.status === 'aceito' ? c.titulo : null,
         texto: c.status === 'aceito' ? c.texto : null,
         registradoEm: c.registrado_em,
       })),
@@ -236,7 +270,7 @@ async function rotasCompartilhados(
   if (request.method === 'POST' && !id) {
     const corpo = (await request.json()) as {
       emailDestinatario?: unknown;
-      registros?: { pensamentoId?: unknown; texto?: unknown; registradoEm?: unknown }[];
+      registros?: { pensamentoId?: unknown; titulo?: unknown; texto?: unknown; registradoEm?: unknown }[];
     };
     const email = typeof corpo.emailDestinatario === 'string' ? corpo.emailDestinatario.trim() : '';
     const registros = Array.isArray(corpo.registros) ? corpo.registros : [];
@@ -245,7 +279,12 @@ async function rotasCompartilhados(
     }
     for (const r of registros) {
       // O snapshot precisa ser texto puro (quem recebe tem outra chave).
-      if (typeof r.pensamentoId !== 'string' || !textoValido(r.texto, false) || !dataValida(r.registradoEm)) {
+      if (
+        typeof r.pensamentoId !== 'string' ||
+        !textoValido(r.texto, false) ||
+        !tituloValido(r.titulo, false) ||
+        !dataValida(r.registradoEm)
+      ) {
         return json({ erro: `Cada registro precisa ter entre 1 e ${LIMITE_CARACTERES} caracteres` }, 400);
       }
     }
@@ -278,18 +317,19 @@ async function rotasCompartilhados(
       const linha = await env.DB.prepare(
         `INSERT INTO pensamentos_compartilhados (
           id, pensamento_id, criador_id, criador_nome, destinatario_id, status,
-          texto, registrado_em, excluido, criado_em, atualizado_em
-        ) VALUES (?, ?, ?, ?, ?, 'pendente', ?, ?, 0, ?, ?)
+          texto, registrado_em, excluido, criado_em, atualizado_em, titulo
+        ) VALUES (?, ?, ?, ?, ?, 'pendente', ?, ?, 0, ?, ?, ?)
         ON CONFLICT(pensamento_id, destinatario_id) DO UPDATE SET
           status = 'pendente',
           criador_nome = excluded.criador_nome,
+          titulo = excluded.titulo,
           texto = excluded.texto,
           registrado_em = excluded.registrado_em,
           excluido = 0,
           atualizado_em = excluded.atualizado_em
         RETURNING id`,
       )
-        .bind(novoId, r.pensamentoId as string, usuarioId, criadorNome, destinatario.id, r.texto as string, r.registradoEm as string, agora, agora)
+        .bind(novoId, r.pensamentoId as string, usuarioId, criadorNome, destinatario.id, r.texto as string, r.registradoEm as string, agora, agora, (r.titulo as string | undefined) ?? '')
         .first<{ id: string }>();
       if (!primeiroId) primeiroId = linha?.id ?? novoId;
     }

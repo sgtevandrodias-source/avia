@@ -3,9 +3,11 @@
 // próprios (ver worker/src/pensamentos.ts e worker/migrations/0018).
 
 export const LIMITE_CARACTERES_PENSAMENTO = 500;
+export const LIMITE_CARACTERES_TITULO = 60;
 
 export interface Pensamento {
   id: string;
+  titulo: string; // '' em registros feitos antes do título existir ("Sem título")
   texto: string;
   registradoEm: string; // ISO — data/hora automática do registro
   atualizadoEm: string; // ISO — last write wins na sincronização
@@ -31,6 +33,7 @@ export interface PensamentoRecebido {
   id: string;
   criadorNome: string;
   status: StatusCompartilhamentoPensamento;
+  titulo: string | null; // null enquanto o convite não foi aceito
   texto: string | null; // null enquanto o convite não foi aceito
   registradoEm: string;
 }
