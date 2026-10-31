@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Constants from 'expo-constants';
-import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { useItems } from '../context/ItemsContext';
@@ -15,8 +14,8 @@ import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { avisar, confirmar } from '../utils/confirm';
 
-const CHAVE_PIX = 'ee48f134-99b4-4232-ac32-9a1b14f474a0';
 const EMAIL_CONTATO = 'edsideasfactory@gmail.com';
+const URL_PRIVACIDADE = 'https://edsavia.com.br/privacidade';
 
 const OPCOES_TEMA: { valor: PreferenciaTema; label: string }[] = [
   { valor: 'claro', label: 'Claro' },
@@ -33,7 +32,6 @@ export function SettingsScreen() {
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [salvandoSenha, setSalvandoSenha] = useState(false);
-  const [pixCopiado, setPixCopiado] = useState(false);
   const [statusSync, setStatusSync] = useState<StatusSincronizacao | null>(null);
   const [forcandoResync, setForcandoResync] = useState(false);
 
@@ -49,12 +47,6 @@ export function SettingsScreen() {
   }, [atualizarStatusSync, sincronizando]);
 
   const outrasContasSalvas = contas.length > 1;
-
-  const copiarChavePix = async () => {
-    await Clipboard.setStringAsync(CHAVE_PIX);
-    setPixCopiado(true);
-    setTimeout(() => setPixCopiado(false), 2000);
-  };
 
   // Diferente de "Sincronizar agora" (incremental, a partir do último
   // cursor salvo): apaga TODO o cache local desta conta neste aparelho e
@@ -182,13 +174,15 @@ export function SettingsScreen() {
           </>
         ) : criptografiaConfigurada ? (
           <Text style={styles.textoAjudaSenha}>
-            ✓ Ativada — título, descrição e notas são cifrados antes de sair do aparelho.
+            ✓ Ativada — título, descrição e notas são cifrados antes de sair do aparelho. Ninguém além de você
+            consegue ler esse conteúdo, nem eu, que desenvolvo o Avia (exceto o que você escolher compartilhar).
           </Text>
         ) : (
           <>
             <Text style={styles.textoAjudaSenha}>
-              Opcional: cifre título, descrição e notas com uma frase secreta só sua, pra que nem quem administra o
-              AVIA consiga ler esse conteúdo.
+              Eu, que desenvolvo o Avia, não leio o que você escreve aqui. Pra ter a garantia de que ninguém consegue
+              ler — nem eu —, ative a criptografia: título, descrição e notas passam a ser cifrados com uma frase
+              secreta só sua antes de sair do aparelho.
             </Text>
             <Pressable
               style={styles.botaoSalvarSenha}
@@ -263,19 +257,14 @@ export function SettingsScreen() {
           disso e construí o app que eu mesmo precisava — daí o nome: &quot;Avia, Evandro! Resolve isso!&quot;
         </Text>
         <Text style={[styles.textoSobre, styles.textoSobreApoio]}>
-          O Avia é gratuito e vai continuar sendo. Se ele te ajudou a organizar a vida, um Pix de qualquer valor
-          ajuda a manter o projeto no ar — mas é só se fizer sentido pra você. E se tiver ideia ou encontrar algo
-          que não funciona bem, me manda um feedback, é o que mais me ajuda a melhorar o app.
+          Obrigado por usar o Avia! Se tiver alguma sugestão ou encontrar algo que não funciona bem, me manda um feedback —
+          é o que mais me ajuda a melhorar o app.
         </Text>
 
-        <Pressable style={styles.linhaPix} onPress={copiarChavePix}>
-          <View style={styles.linhaPixInfo}>
-            <Text style={styles.labelPix}>Chave Pix</Text>
-            <Text style={styles.valorPix}>{CHAVE_PIX}</Text>
-          </View>
-          <Text style={styles.linkCopiarPix}>{pixCopiado ? 'Copiado!' : 'Copiar'}</Text>
-        </Pressable>
         <Text style={styles.textoContato}>Feedback: {EMAIL_CONTATO}</Text>
+        <Pressable onPress={() => Linking.openURL(URL_PRIVACIDADE)}>
+          <Text style={styles.linkPrivacidade}>Política de Privacidade</Text>
+        </Pressable>
 
         <Text style={styles.textoVersao}>Desenvolvido por Evandro Dias · Versão {Constants.expoConfig?.version ?? '—'}</Text>
       </View>
@@ -392,40 +381,18 @@ function criarEstilos(colors: Paleta) {
   textoSobreApoio: {
     marginTop: 4,
   },
-  linhaPix: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 4,
-  },
-  linhaPixInfo: { flex: 1 },
-  labelPix: {
-    fontFamily: fonts.medium,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  valorPix: {
-    fontFamily: fonts.regular,
-    fontSize: 13,
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  linkCopiarPix: {
-    fontFamily: fonts.bold,
-    fontSize: 13,
-    color: colors.urgentHoje,
-    marginLeft: 12,
-  },
   textoContato: {
     fontFamily: fonts.regular,
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 10,
+  },
+  linkPrivacidade: {
+    fontFamily: fonts.medium,
+    fontSize: 12,
+    color: colors.urgentHoje,
+    marginTop: 6,
+    paddingVertical: 4,
   },
   input: {
     fontFamily: fonts.regular,

@@ -1,5 +1,6 @@
 const CACHE_NAME = 'avia-shell-v1';
 const CORE_ASSETS = ['/', '/favicon.ico', '/manifest.json'];
+const PAGINAS_ESTATICAS = ['/privacidade', '/excluir-conta'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -23,6 +24,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Páginas estáticas (política de privacidade, exclusão de conta) não são o
+  // app: sem isso, abrir uma delas sobrescreveria o cache de '/' abaixo.
+  if (PAGINAS_ESTATICAS.some((p) => url.pathname.startsWith(p))) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
