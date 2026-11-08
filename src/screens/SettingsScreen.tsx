@@ -173,10 +173,18 @@ export function SettingsScreen() {
             </Pressable>
           </>
         ) : criptografiaConfigurada ? (
-          <Text style={styles.textoAjudaSenha}>
-            ✓ Ativada — título, descrição e notas são cifrados antes de sair do aparelho. Ninguém além de você
-            consegue ler esse conteúdo, nem eu, que desenvolvo o Avia (exceto o que você escolher compartilhar).
-          </Text>
+          <>
+            <Text style={styles.textoAjudaSenha}>
+              ✓ Ativada — título, descrição e notas são cifrados antes de sair do aparelho. Ninguém além de você
+              consegue ler esse conteúdo, nem eu, que desenvolvo o Avia (exceto o que você escolher compartilhar).
+            </Text>
+            <Pressable
+              style={styles.botaoSalvarSenha}
+              onPress={() => navigation.navigate('ConfigurarCriptografia', { modo: 'trocar' })}
+            >
+              <Text style={styles.botaoSalvarSenhaTexto}>Trocar frase secreta</Text>
+            </Pressable>
+          </>
         ) : (
           <>
             <Text style={styles.textoAjudaSenha}>

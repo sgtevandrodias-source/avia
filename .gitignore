@@ -55,6 +55,7 @@ yarn-error.*
 # builds baixados localmente + tokens salvos à mão — nunca devem entrar
 # em pacote nenhum (git ou build da EAS)
 *.apk
+*.aab
 aviatoken.txt
 
 # Backups do D1 (wrangler d1 export) — têm os dados de TODOS os usuários;

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as db from '../db/database';
 import { useAuth } from '../auth/AuthContext';
 import { useItems } from '../context/ItemsContext';
@@ -19,7 +19,11 @@ export function ConfigurarCriptografiaScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => criarEstilos(colors), [colors]);
   const navigation = useNavigation<any>();
-  const { configurarCriptografia } = useAuth();
+  const route = useRoute<any>();
+  // 'trocar' = já configurada e destravada neste aparelho: troca a frase sem
+  // pedir a antiga (ver trocarFraseSecreta em AuthContext).
+  const trocando = route.params?.modo === 'trocar';
+  const { usuario, configurarCriptografia, trocarFraseSecreta } = useAuth();
   const { sincronizarAgora } = useItems();
 
   const [passo, setPasso] = useState<Passo>('senha');
@@ -42,7 +46,7 @@ export function ConfigurarCriptografiaScreen() {
     setProcessando(true);
     try {
       await aguardarProximoFrame();
-      const codigo = await configurarCriptografia(fraseSenha);
+      const codigo = trocando ? await trocarFraseSecreta(fraseSenha) : await configurarCriptografia(fraseSenha);
       setCodigoRecuperacao(codigo);
       setPasso('recuperacao');
     } catch (e) {
@@ -52,8 +56,27 @@ export function ConfigurarCriptografiaScreen() {
     }
   };
 
+  // Abre o app de e-mail do próprio aparelho já preenchido — o código vai do
+  // celular direto pra caixa do usuário, sem passar pelo servidor do Avia.
+  const enviarCodigoPorEmail = () => {
+    const assunto = 'Meu código de recuperação do Avia';
+    const corpo =
+      `Código de recuperação da criptografia do Avia:
+
+${codigoRecuperacao}
+
+` +
+      'Se eu esquecer a frase secreta, posso digitar este código no lugar dela pra desbloquear meus dados.';
+    const destino = usuario?.email ?? '';
+    Linking.openURL(
+      `mailto:${destino}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`,
+    ).catch(() => avisar('Não foi possível abrir o e-mail', 'Copie o código tocando e segurando sobre ele.'));
+  };
+
   const continuarComRecuperacao = async () => {
     setPasso('concluido');
+    // Na troca de frase a DEK é a mesma: nada a recifrar nem reenviar.
+    if (trocando) return;
     setMigrando(true);
     try {
       // Sincroniza ANTES de tocar em qualquer coisa: precisa ter certeza que
@@ -91,18 +114,30 @@ export function ConfigurarCriptografiaScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {passo === 'senha' && (
           <>
-            <Text style={styles.titulo}>Proteger seus dados</Text>
-            <Text style={styles.texto}>
-              Crie uma frase secreta pra cifrar o título, a descrição e as notas dos seus itens. Ela é diferente da
-              sua senha de login e nunca é enviada pro servidor — a partir de agora, nem quem administra o AVIA
-              consegue ler esse conteúdo.
-            </Text>
+            {trocando ? (
+              <>
+                <Text style={styles.titulo}>Trocar frase secreta</Text>
+                <Text style={styles.texto}>
+                  Como este aparelho já está desbloqueado, você não precisa da frase antiga. Crie uma nova — seus
+                  itens continuam como estão. A frase e o código de recuperação antigos deixam de funcionar.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.titulo}>Proteger seus dados</Text>
+                <Text style={styles.texto}>
+                  Crie uma frase secreta pra cifrar o título, a descrição e as notas dos seus itens. Ela é diferente
+                  da sua senha de login e nunca é enviada pro servidor — a partir de agora, nem quem administra o
+                  AVIA consegue ler esse conteúdo.
+                </Text>
+              </>
+            )}
             <Text style={[styles.texto, styles.aviso]}>
               Se você esquecer essa frase, só o código de recuperação da próxima tela vai poder recuperar o acesso.
               Guarde os dois com cuidado.
             </Text>
 
-            <Text style={styles.label}>Frase secreta</Text>
+            <Text style={styles.label}>{trocando ? 'Nova frase secreta' : 'Frase secreta'}</Text>
             <TextInput
               style={styles.input}
               value={fraseSenha}
@@ -144,6 +179,14 @@ export function ConfigurarCriptografiaScreen() {
             </View>
             <Text style={styles.dica}>Toque e segure o código pra copiar.</Text>
 
+            <Pressable style={styles.botaoSecundario} onPress={enviarCodigoPorEmail}>
+              <Text style={styles.botaoSecundarioTexto}>Enviar o código para o meu e-mail</Text>
+            </Pressable>
+            <Text style={styles.dica}>
+              Abre o seu app de e-mail com o código já escrito — ele vai do seu celular direto pra sua caixa, sem
+              passar pelo Avia.
+            </Text>
+
             <Pressable
               style={styles.linhaConfirmacao}
               onPress={() => setConfirmouQueSalvou((valor) => !valor)}
@@ -168,7 +211,9 @@ export function ConfigurarCriptografiaScreen() {
             <Text style={styles.texto}>
               {migrando
                 ? 'Recriptografando os itens que você já tinha. Isso pode levar alguns segundos.'
-                : 'Seus itens agora são cifrados antes de sair do aparelho. Novos itens já saem protegidos automaticamente.'}
+                : trocando
+                  ? 'Frase secreta trocada. Em outro aparelho, use a frase nova (ou o código novo) pra desbloquear.'
+                  : 'Seus itens agora são cifrados antes de sair do aparelho. Novos itens já saem protegidos automaticamente.'}
             </Text>
             {migrando ? (
               <ActivityIndicator color={colors.urgentHoje} style={styles.spinner} />
@@ -218,6 +263,15 @@ function criarEstilos(colors: Paleta) {
     alignItems: 'center',
   },
   botaoDesabilitado: { opacity: 0.5 },
+  botaoSecundario: {
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.urgentHoje,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  botaoSecundarioTexto: { fontFamily: fonts.bold, fontSize: 14, color: colors.urgentHoje },
   botaoPrimarioTexto: { fontFamily: fonts.bold, fontSize: 15, color: colors.white },
   botaoCancelar: { marginTop: 14, alignItems: 'center', paddingVertical: 10 },
   botaoCancelarTexto: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },

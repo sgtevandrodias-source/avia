@@ -59,9 +59,27 @@ interface AuthContextValue {
   criptografiaBloqueada: boolean;
   configurarCriptografia: (fraseSenha: string) => Promise<string>;
   desbloquearCriptografia: (segredo: string) => Promise<boolean>;
+  trocarFraseSecreta: (novaFraseSenha: string) => Promise<string>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** Embrulha `dek` com a frase-senha e com um código de recuperação novo e grava o envelope no servidor (sobrescreve o anterior). Retorna o código. */
+async function salvarEnvelopeParaDek(dek: Uint8Array, fraseSenha: string): Promise<string> {
+  const codigoRecuperacao = gerarCodigoRecuperacao();
+  const embrulhadaSenha = embrulharDek(dek, fraseSenha);
+  const embrulhadaRecuperacao = embrulharDek(dek, normalizarCodigoRecuperacao(codigoRecuperacao));
+  const envelope: EnvelopeCifra = {
+    versao: 1,
+    kdfIteracoes: ITERACOES_PBKDF2,
+    saltSenha: embrulhadaSenha.saltB64,
+    dekCifradaPorSenha: embrulhadaSenha.dekCifradaB64,
+    saltRecuperacao: embrulhadaRecuperacao.saltB64,
+    dekCifradaPorRecuperacao: embrulhadaRecuperacao.dekCifradaB64,
+  };
+  await salvarEnvelopeCifra(envelope);
+  return codigoRecuperacao;
+}
 
 async function chamarAuth(caminho: string, corpo: unknown): Promise<SessaoSalva> {
   const resposta = await fetch(`${API_URL}/auth/${caminho}`, {
@@ -347,25 +365,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (fraseSenha: string) => {
       if (!usuario) throw new Error('Sem sessão ativa.');
       const dek = gerarDek();
-      const codigoRecuperacao = gerarCodigoRecuperacao();
-
-      const embrulhadaSenha = embrulharDek(dek, fraseSenha);
-      const embrulhadaRecuperacao = embrulharDek(dek, normalizarCodigoRecuperacao(codigoRecuperacao));
-
-      const envelope: EnvelopeCifra = {
-        versao: 1,
-        kdfIteracoes: ITERACOES_PBKDF2,
-        saltSenha: embrulhadaSenha.saltB64,
-        dekCifradaPorSenha: embrulhadaSenha.dekCifradaB64,
-        saltRecuperacao: embrulhadaRecuperacao.saltB64,
-        dekCifradaPorRecuperacao: embrulhadaRecuperacao.dekCifradaB64,
-      };
-      await salvarEnvelopeCifra(envelope);
+      const codigoRecuperacao = await salvarEnvelopeParaDek(dek, fraseSenha);
       await salvarChaveLocal(usuario.id, dek);
       definirChaveAtual(dek);
       setCriptografiaBloqueada(false);
       setCriptografiaConfigurada(true);
       return codigoRecuperacao;
+    },
+    [usuario],
+  );
+
+  /**
+   * Troca a frase secreta SEM pedir a antiga: só funciona num aparelho que já
+   * tem a DEK destravada em cache. Reembrulha a MESMA DEK com a nova frase e
+   * um novo código de recuperação — os itens já cifrados continuam valendo,
+   * nada precisa ser recifrado. A frase e o código antigos deixam de
+   * funcionar (o servidor sobrescreve o envelope). Retorna o novo código.
+   */
+  const trocarFraseSecreta = useCallback(
+    async (novaFraseSenha: string) => {
+      if (!usuario) throw new Error('Sem sessão ativa.');
+      const dek = await lerChaveLocal(usuario.id);
+      if (!dek) throw new Error('Este aparelho não tem a chave da criptografia. Desbloqueie primeiro.');
+      return salvarEnvelopeParaDek(dek, novaFraseSenha);
     },
     [usuario],
   );
@@ -425,6 +447,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         criptografiaBloqueada,
         configurarCriptografia,
         desbloquearCriptografia,
+        trocarFraseSecreta,
       }}
     >
       {children}
