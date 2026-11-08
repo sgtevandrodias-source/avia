@@ -1,4 +1,5 @@
 import * as db from '../db/database';
+import { pausarAgenda, retomarAgenda } from '../agenda/agenda';
 import { obterTokenAtual } from '../auth/sessionToken';
 import { cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { cifrarItemParaEnvio, decifrarItemRecebido } from '../crypto/itemCriptografia';
@@ -253,9 +254,16 @@ export async function forcarResyncCompleto(): Promise<void> {
  */
 export async function limparCacheLocalERessincronizar(): Promise<void> {
   await sincronizar();
-  await db.limparTudoLocal();
-  await forcarResyncCompleto();
-  await sincronizar();
+  // Com o cache vazio, a agenda entenderia que todas as tarefas foram excluídas
+  // e apagaria os eventos — fica suspensa até as tarefas voltarem.
+  pausarAgenda();
+  try {
+    await db.limparTudoLocal();
+    await forcarResyncCompleto();
+    await sincronizar();
+  } finally {
+    retomarAgenda();
+  }
 }
 
 /**

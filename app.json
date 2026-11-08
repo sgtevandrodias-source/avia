@@ -59,7 +59,14 @@
           "speechRecognitionPermission": "O AVIA usa o reconhecimento de fala para transformar sua fala em um item."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "O AVIA usa o calendário para colocar suas tarefas na Google Agenda, se você ativar essa opção.",
+          "remindersPermission": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

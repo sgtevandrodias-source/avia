@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as db from '../db/database';
+import { sincronizarAgenda } from '../agenda/agenda';
 import { useAuth } from '../auth/AuthContext';
 import { useCategorias } from './CategoriasContext';
 import {
@@ -71,6 +72,9 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     setSincronizando(true);
     try {
       await sincronizar();
+      // Roda mesmo sem internet (tarefas criadas offline também vão pra agenda)
+      // e sem esperar, pra uma agenda lenta não segurar a tela. Nunca lança erro.
+      sincronizarAgenda();
       // recarregar()/recarregarCategorias() fazem sua própria chamada de
       // rede (independente do push/pull acima) e podem falhar por um
       // soluço passageiro — sincronizar() já nunca lança por design ("o app
