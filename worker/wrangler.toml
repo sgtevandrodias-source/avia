@@ -10,6 +10,30 @@ binding = "DB"
 database_name = "avia-db"
 database_id = "2d3b7413-c933-47b3-ac7c-ad2eed0252b7"
 
+# Limite de tentativas (ver dentroDoLimite em src/index.ts). A contagem da
+# Cloudflare é aproximada e por região; o período só pode ser 10 ou 60 s.
+# Os namespace_id precisam ser únicos na conta da Cloudflare.
+[[ratelimits]]
+name = "LIMITE_LOGIN"   # por e-mail: tentativas de senha
+namespace_id = "41001"
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+[[ratelimits]]
+name = "LIMITE_IP"      # por endereço de rede: todas as rotas /auth
+namespace_id = "41002"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+[[ratelimits]]
+name = "LIMITE_USUARIO" # por conta logada: buscar usuário e compartilhar
+namespace_id = "41003"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
 [[r2_buckets]]
 binding = "ARQUIVO"
 bucket_name = "avia-arquivo"

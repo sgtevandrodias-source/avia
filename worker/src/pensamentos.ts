@@ -7,8 +7,8 @@ import type { Env } from './index';
 //
 // Privacidade (dados de saúde mental): nada do conteúdo dos registros vai
 // pra log nem pra mensagem de erro. Por isso este módulo tem o próprio
-// try/catch com resposta genérica, em vez de cair no catch do fetch() em
-// index.ts (que devolve `detalhe: String(erro)`).
+// try/catch com resposta genérica e sem log nenhum, em vez de cair no catch
+// do fetch() em index.ts.
 
 export interface DependenciasPensamentos {
   json: (data: unknown, status?: number) => Response;

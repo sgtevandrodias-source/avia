@@ -4,12 +4,23 @@ import { gerarOcorrenciasPendentesNoServidor } from './recorrencia';
 import { arquivarItensAntigos } from './arquivamento';
 import { apagarPensamentosDaConta, tratarPensamentos } from './pensamentos';
 
+// Binding de limite de tentativas da Cloudflare ([[ratelimits]] em
+// wrangler.toml). Tipado à mão e opcional de propósito: se o binding não
+// existir (ex.: recurso indisponível no plano), o Worker segue funcionando
+// como antes, só sem o limite — ver dentroDoLimite.
+interface Limitador {
+  limit(opcoes: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface Env {
   DB: D1Database;
   ARQUIVO: R2Bucket;
   API_KEY: string;
   JWT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
+  LIMITE_LOGIN?: Limitador;
+  LIMITE_IP?: Limitador;
+  LIMITE_USUARIO?: Limitador;
 }
 
 interface ItemApi {
@@ -125,6 +136,60 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
+}
+
+/**
+ * Limite de tentativas (login, cadastro, busca de usuário, compartilhar).
+ * A contagem da Cloudflare é aproximada e por região — serve pra frear
+ * tentativa em massa de senha, não é um contador exato. Se o binding não
+ * existir ou falhar, deixa passar: nunca pode derrubar o login de ninguém.
+ */
+async function dentroDoLimite(limitador: Limitador | undefined, chave: string): Promise<boolean> {
+  if (!limitador) return true;
+  try {
+    const { success } = await limitador.limit({ key: chave });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
+function respostaLimiteExcedido(): Response {
+  return json({ erro: 'Muitas tentativas seguidas. Espere um minuto e tente de novo.' }, 429);
+}
+
+// Tetos de tamanho bem folgados (texto cifrado ocupa ~1/3 a mais que o
+// original) — só pra impedir que alguém encha o banco com um texto gigante.
+// O app nunca chega perto disso no uso normal.
+const LIMITE_CORPO_BYTES = 1_000_000;
+const LIMITE_TEXTO_LONGO = 100_000;
+const LIMITE_TEXTO_CURTO = 1_000;
+
+function textoGrande(valor: unknown, limite: number): boolean {
+  return typeof valor === 'string' && valor.length > limite;
+}
+
+function respostaTextoGrande(): Response {
+  return json({ erro: 'Texto grande demais' }, 413);
+}
+
+function categoriaGrandeDemais(categoria: CategoriaApi): boolean {
+  return (
+    textoGrande(categoria.id, LIMITE_TEXTO_CURTO) ||
+    textoGrande(categoria.nome, LIMITE_TEXTO_CURTO) ||
+    textoGrande(categoria.icone, LIMITE_TEXTO_CURTO) ||
+    textoGrande(categoria.cor, LIMITE_TEXTO_CURTO)
+  );
+}
+
+function itemGrandeDemais(item: ItemApi): boolean {
+  return (
+    textoGrande(item.id, LIMITE_TEXTO_CURTO) ||
+    textoGrande(item.titulo, LIMITE_TEXTO_LONGO) ||
+    textoGrande(item.textoOriginal, LIMITE_TEXTO_LONGO) ||
+    textoGrande(item.notas, LIMITE_TEXTO_LONGO) ||
+    textoGrande(item.categoria, LIMITE_TEXTO_CURTO)
+  );
 }
 
 function rowParaApi(row: ItemRow): ItemApi {
@@ -276,7 +341,8 @@ async function sincronizarSerieDaRaiz(db: D1Database, item: ItemApi, usuarioId: 
         lembrete_offset_minutos = excluded.lembrete_offset_minutos,
         prioridade = excluded.prioridade,
         ativa = 1,
-        atualizado_em = excluded.atualizado_em`,
+        atualizado_em = excluded.atualizado_em
+      WHERE series_recorrentes.usuario_id = excluded.usuario_id`,
     )
     .bind(
       item.id,
@@ -310,7 +376,7 @@ async function upsertComLWW(
 
   const serieChave = item.origemRecorrenciaId ?? item.id;
 
-  await db
+  const gravacao = await db
     .prepare(
       `INSERT INTO items (
         id, texto_original, titulo, data, hora_compromisso, hora_limite,
@@ -364,6 +430,13 @@ async function upsertComLWW(
     )
     .run();
 
+  // Nenhuma linha gravada = o id já existe e pertence a OUTRA conta (o
+  // `WHERE items.usuario_id = ?` acima barrou). Nesse caso não pode mexer
+  // em série nem em compartilhamento de ninguém.
+  if (!gravacao.meta.changes) {
+    return { item, aplicado: false };
+  }
+
   await sincronizarSerieDaRaiz(db, item, usuarioId);
   await sincronizarConclusaoCompartilhamentos(db, item.id, usuarioId, item.status === 'feito');
 
@@ -403,15 +476,15 @@ async function sincronizarConclusaoCompartilhamentos(
 
   const linha = await db
     .prepare(
-      `SELECT c.id, c.destinatario_id, c.titulo, u.nome as criador_nome
+      `SELECT c.id, c.destinatario_id, u.nome as criador_nome
        FROM compartilhamentos c JOIN usuarios u ON u.id = c.criador_id
        WHERE c.item_id = ? AND c.criador_id = ? AND c.excluido = 0`,
     )
     .bind(itemId, criadorId)
-    .first<{ id: string; destinatario_id: string; titulo: string; criador_nome: string }>();
+    .first<{ id: string; destinatario_id: string; criador_nome: string }>();
   if (!linha) return;
 
-  await enviarPushConclusaoCompartilhamento(db, linha.destinatario_id, linha.criador_nome, linha.titulo, linha.id);
+  await enviarPushConclusaoCompartilhamento(db, linha.destinatario_id, linha.criador_nome, linha.id);
 }
 
 async function autenticar(request: Request, env: Env): Promise<string | null> {
@@ -426,11 +499,34 @@ async function autenticar(request: Request, env: Env): Promise<string | null> {
   return payload?.sub ?? null;
 }
 
+// Teto pra senha: evita gastar o PBKDF2 com textos enormes de propósito.
+const SENHA_MIN = 6;
+const SENHA_MAX = 200;
+
 async function tratarAuth(request: Request, env: Env, rota: string): Promise<Response> {
+  // Freio geral por endereço de rede em todas as rotas de entrada/cadastro —
+  // folgado (várias pessoas podem dividir o mesmo IP, ex.: Wi-Fi de empresa).
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'desconhecido';
+  if (!(await dentroDoLimite(env.LIMITE_IP, `auth:${ip}`))) {
+    return respostaLimiteExcedido();
+  }
+
   if (rota === 'registrar' && request.method === 'POST') {
     const { email, senha, nome } = (await request.json()) as { email?: string; senha?: string; nome?: string };
     if (!email || !senha || !nome) {
       return json({ erro: 'email, senha e nome são obrigatórios' }, 400);
+    }
+    if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return json({ erro: 'E-mail inválido' }, 400);
+    }
+    if (typeof senha !== 'string' || senha.length < SENHA_MIN) {
+      return json({ erro: `A senha precisa ter pelo menos ${SENHA_MIN} caracteres` }, 400);
+    }
+    if (senha.length > SENHA_MAX) {
+      return json({ erro: `A senha pode ter no máximo ${SENHA_MAX} caracteres` }, 400);
+    }
+    if (typeof nome !== 'string' || textoGrande(nome, 100)) {
+      return json({ erro: 'Nome muito longo' }, 400);
     }
     const existente = await env.DB.prepare('SELECT id FROM usuarios WHERE email = ?').bind(email).first();
     if (existente) return json({ erro: 'E-mail já cadastrado' }, 409);
@@ -451,8 +547,17 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
   if (rota === 'login' && request.method === 'POST') {
     const { email, senha } = (await request.json()) as { email?: string; senha?: string };
     if (!email || !senha) return json({ erro: 'email e senha são obrigatórios' }, 400);
+    if (typeof email !== 'string' || typeof senha !== 'string' || email.length > 254 || senha.length > SENHA_MAX) {
+      return json({ erro: 'E-mail ou senha inválidos' }, 401);
+    }
+    // Freio por conta: impede chutar senhas de um e-mail específico, mesmo
+    // trocando de IP. Conta tentativas certas e erradas (a Cloudflare só
+    // conta chamadas) — 5 por minuto não atrapalha quem digita a senha.
+    if (!(await dentroDoLimite(env.LIMITE_LOGIN, `login:${email.trim().toLowerCase()}`))) {
+      return respostaLimiteExcedido();
+    }
 
-    const usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(email).first<UsuarioRow>();
+    const usuario =await env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(email).first<UsuarioRow>();
     if (!usuario || !usuario.senha_hash) return json({ erro: 'E-mail ou senha inválidos' }, 401);
 
     const senhaOk = await verificarSenha(senha, usuario.senha_hash);
@@ -476,6 +581,12 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
     if (!usuario) {
       // Se já existir conta com esse e-mail (criada via senha), vincula o Google a ela.
       usuario = await env.DB.prepare('SELECT * FROM usuarios WHERE email = ?').bind(payload.email).first<UsuarioRow>();
+      // Só vincula se o Google garante que a pessoa é dona do e-mail — senão
+      // qualquer conta Google com um e-mail "emprestado" entraria na conta
+      // de outra pessoa. (Contas Gmail sempre vêm verificadas.)
+      if (usuario && payload.email_verified !== true && payload.email_verified !== 'true') {
+        return json({ erro: 'Já existe uma conta com esse e-mail. Entre com e-mail e senha.' }, 409);
+      }
       if (usuario) {
         await env.DB.prepare('UPDATE usuarios SET google_sub = ?, foto_url = ? WHERE id = ?')
           .bind(payload.sub, payload.picture ?? null, usuario.id)
@@ -560,6 +671,7 @@ async function tratarCategorias(
     if (!categoria.id || !categoria.atualizadoEm) {
       return json({ erro: 'id e atualizadoEm são obrigatórios' }, 400);
     }
+    if (categoriaGrandeDemais(categoria)) return respostaTextoGrande();
     const resultado = await upsertCategoriaComLWW(env.DB, categoria, usuarioId);
     return json(resultado.categoria, resultado.aplicado ? 200 : 409);
   }
@@ -571,6 +683,7 @@ async function tratarCategorias(
     if (!categoria.atualizadoEm) {
       return json({ erro: 'atualizadoEm é obrigatório' }, 400);
     }
+    if (categoriaGrandeDemais(categoria)) return respostaTextoGrande();
     const resultado = await upsertCategoriaComLWW(env.DB, categoria, usuarioId);
     return json(resultado.categoria, resultado.aplicado ? 200 : 409);
   }
@@ -671,10 +784,15 @@ function compartilhamentoRowParaApi(
 }
 
 /** GET /usuarios/buscar?email=... — busca exata por e-mail, nunca lista/filtra por outro critério (não expor a base de contas). */
-async function tratarUsuariosBusca(request: Request, env: Env, url: URL): Promise<Response> {
+async function tratarUsuariosBusca(request: Request, env: Env, usuarioId: string, url: URL): Promise<Response> {
   if (request.method !== 'GET') return json({ erro: 'Método não suportado' }, 405);
   const email = url.searchParams.get('email');
   if (!email) return json({ erro: 'email é obrigatório' }, 400);
+  // A busca revela se um e-mail tem conta no Avia — o limite impede
+  // varrer listas de e-mails pra descobrir quem usa o app.
+  if (!(await dentroDoLimite(env.LIMITE_USUARIO, `buscar:${usuarioId}`))) {
+    return respostaLimiteExcedido();
+  }
   const usuario = await env.DB.prepare('SELECT id, nome FROM usuarios WHERE email = ?')
     .bind(email)
     .first<{ id: string; nome: string }>();
@@ -734,18 +852,20 @@ async function enviarPush(
   }
 }
 
+// Privacidade: o texto das notificações passa pelos servidores do Expo e do
+// Firebase, então diz só QUEM compartilhou — nunca o título da tarefa (é o
+// que a política de privacidade promete). O conteúdo aparece só dentro do app.
 async function enviarPushCompartilhamento(
   db: D1Database,
   destinatarioId: string,
   criadorNome: string,
-  tituloItem: string,
   compartilhamentoId: string,
 ): Promise<void> {
   await enviarPush(
     db,
     destinatarioId,
     'Novo compromisso compartilhado',
-    `${criadorNome} compartilhou "${tituloItem}" com você`,
+    `${criadorNome} compartilhou um compromisso com você`,
     compartilhamentoId,
   );
 }
@@ -765,14 +885,13 @@ async function enviarPushConclusaoCompartilhamento(
   db: D1Database,
   destinatarioId: string,
   criadorNome: string,
-  tituloItem: string,
   compartilhamentoId: string,
 ): Promise<void> {
   await enviarPush(
     db,
     destinatarioId,
     'Compromisso concluído',
-    `${criadorNome} marcou "${tituloItem}" como feito`,
+    `${criadorNome} concluiu um compromisso que compartilhou com você`,
     compartilhamentoId,
   );
 }
@@ -856,6 +975,21 @@ async function tratarCompartilhamentos(
     if (!itemId || !emailDestinatario || !titulo || !textoOriginal || !data || !tipoHorario || !categoriaNome || !categoriaIcone || !categoriaCor) {
       return json({ erro: 'Dados incompletos pra compartilhar' }, 400);
     }
+    if (
+      textoGrande(titulo, LIMITE_TEXTO_LONGO) ||
+      textoGrande(textoOriginal, LIMITE_TEXTO_LONGO) ||
+      textoGrande(corpo.notas, LIMITE_TEXTO_LONGO) ||
+      textoGrande(categoriaNome, LIMITE_TEXTO_CURTO) ||
+      textoGrande(categoriaIcone, LIMITE_TEXTO_CURTO) ||
+      textoGrande(categoriaCor, LIMITE_TEXTO_CURTO)
+    ) {
+      return respostaTextoGrande();
+    }
+    // Cada compartilhamento dispara uma notificação no celular de outra
+    // pessoa — o limite impede usar isso pra encher alguém de avisos.
+    if (!(await dentroDoLimite(env.LIMITE_USUARIO, `compartilhar:${usuarioId}`))) {
+      return respostaLimiteExcedido();
+    }
 
     const item = await buscarPorId(env.DB, itemId, usuarioId);
     if (!item) return json({ erro: 'Item não encontrado' }, 403);
@@ -921,7 +1055,7 @@ async function tratarCompartilhamentos(
     // RETURNING id devolve o id de verdade da linha — numa atualização
     // (ON CONFLICT), é o id ORIGINAL do compartilhamento, não o novoId
     // gerado agora, então isso não pode vir de `novoId` direto.
-    await enviarPushCompartilhamento(env.DB, destinatario.id, criador?.nome ?? 'Alguém', titulo, resultado?.id ?? novoId);
+    await enviarPushCompartilhamento(env.DB, destinatario.id, criador?.nome ?? 'Alguém', resultado?.id ?? novoId);
 
     return json({ ok: true });
   }
@@ -1061,8 +1195,11 @@ async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota
 
   if (rota === 'senha' && request.method === 'POST') {
     const { senha } = (await request.json()) as { senha?: string };
-    if (!senha || senha.length < 6) {
-      return json({ erro: 'A senha precisa ter pelo menos 6 caracteres' }, 400);
+    if (typeof senha !== 'string' || senha.length < SENHA_MIN) {
+      return json({ erro: `A senha precisa ter pelo menos ${SENHA_MIN} caracteres` }, 400);
+    }
+    if (senha.length > SENHA_MAX) {
+      return json({ erro: `A senha pode ter no máximo ${SENHA_MAX} caracteres` }, 400);
     }
     const senhaHash = await hashSenha(senha);
     await env.DB.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').bind(senhaHash, usuarioId).run();
@@ -1145,6 +1282,12 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
+    // Corpo gigante é recusado antes de qualquer leitura (o app nunca manda
+    // nada perto de 1 MB — uma tarefa por vez).
+    if (Number(request.headers.get('Content-Length') ?? 0) > LIMITE_CORPO_BYTES) {
+      return respostaTextoGrande();
+    }
+
     try {
       // /auth/* não exige token — é o próprio login/cadastro.
       if (partes[0] === 'auth') {
@@ -1165,7 +1308,7 @@ export default {
       }
 
       if (partes[0] === 'usuarios' && partes[1] === 'buscar') {
-        return await tratarUsuariosBusca(request, env, url);
+        return await tratarUsuariosBusca(request, env, usuarioId, url);
       }
 
       if (partes[0] === 'compartilhamentos') {
@@ -1226,6 +1369,7 @@ export default {
         if (!item.id || !item.atualizadoEm) {
           return json({ erro: 'id e atualizadoEm são obrigatórios' }, 400);
         }
+        if (itemGrandeDemais(item)) return respostaTextoGrande();
         const resultado = await upsertComLWW(env.DB, item, usuarioId);
         return json(resultado.item, resultado.aplicado ? 200 : 409);
       }
@@ -1237,6 +1381,7 @@ export default {
         if (!item.atualizadoEm) {
           return json({ erro: 'atualizadoEm é obrigatório' }, 400);
         }
+        if (itemGrandeDemais(item)) return respostaTextoGrande();
         const resultado = await upsertComLWW(env.DB, item, usuarioId);
         return json(resultado.item, resultado.aplicado ? 200 : 409);
       }
@@ -1257,7 +1402,11 @@ export default {
 
       return json({ erro: 'Método não suportado' }, 405);
     } catch (erro) {
-      return json({ erro: 'Erro interno', detalhe: String(erro) }, 500);
+      // Sem detalhe na resposta (não expõe o funcionamento interno) e, no
+      // log, só o TIPO do erro: a mensagem de um JSON malformado, por
+      // exemplo, traz um trecho do que o usuário mandou.
+      console.error('Erro interno', request.method, partes[0] ?? '', erro instanceof Error ? erro.name : typeof erro);
+      return json({ erro: 'Erro interno' }, 500);
     }
   },
 };

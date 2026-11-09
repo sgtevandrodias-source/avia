@@ -140,6 +140,8 @@ async function buscarJwksGoogle(): Promise<GoogleJwk[]> {
 export interface GoogleIdTokenPayload {
   sub: string;
   email: string;
+  // O Google manda booleano; aceita também a string por segurança.
+  email_verified?: boolean | string;
   name: string;
   picture?: string;
   aud: string;
