@@ -46,12 +46,7 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function () {
-          navigator.serviceWorker.register('/sw.js').catch(function () {});
-        });
-      }
-    </script>
+    <!-- Em arquivo próprio: a política de segurança não aceita script embutido. -->
+    <script src="/registrar-sw.js"></script>
   </body>
 </html>
