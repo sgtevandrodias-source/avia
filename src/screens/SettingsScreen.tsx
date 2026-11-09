@@ -16,6 +16,7 @@ import { avisar, confirmar } from '../utils/confirm';
 
 const EMAIL_CONTATO = 'edsideasfactory@gmail.com';
 const URL_PRIVACIDADE = 'https://edsavia.com.br/privacidade';
+const URL_TERMOS = 'https://edsavia.com.br/termos';
 
 const OPCOES_TEMA: { valor: PreferenciaTema; label: string }[] = [
   { valor: 'claro', label: 'Claro' },
@@ -272,6 +273,9 @@ export function SettingsScreen() {
         <Text style={styles.textoContato}>Feedback: {EMAIL_CONTATO}</Text>
         <Pressable onPress={() => Linking.openURL(URL_PRIVACIDADE)}>
           <Text style={styles.linkPrivacidade}>Política de Privacidade</Text>
+        </Pressable>
+        <Pressable onPress={() => Linking.openURL(URL_TERMOS)}>
+          <Text style={styles.linkPrivacidade}>Termos de Uso</Text>
         </Pressable>
 
         <Text style={styles.textoVersao}>Desenvolvido por Evandro Dias · Versão {Constants.expoConfig?.version ?? '—'}</Text>

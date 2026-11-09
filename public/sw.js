@@ -1,6 +1,6 @@
 const CACHE_NAME = 'avia-shell-v1';
 const CORE_ASSETS = ['/', '/favicon.ico', '/manifest.json'];
-const PAGINAS_ESTATICAS = ['/privacidade', '/excluir-conta'];
+const PAGINAS_ESTATICAS = ['/privacidade', '/excluir-conta', '/termos'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

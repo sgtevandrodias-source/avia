@@ -2,11 +2,11 @@
 
 > Versão publicada em `https://edsavia.com.br/privacidade` (arquivo `public/privacidade.html`). Ao mudar este texto, atualize os dois.
 
-**Última atualização:** 31 de outubro de 2026
+**Última atualização:** 9 de novembro de 2026
 
-Esta política explica quais dados o aplicativo **Avia** (Android e versão web em edsavia.com.br) coleta, para que eles são usados e quais são os seus direitos, de acordo com a Lei Geral de Proteção de Dados (LGPD, Lei nº 13.709/2018).
+Esta política explica quais dados o aplicativo **Avia** (Android e versão web em edsavia.com.br) coleta, para que eles são usados e quais são os seus direitos, de acordo com a Lei Geral de Proteção de Dados (LGPD, Lei nº 13.709/2018). O uso do app também segue os [Termos de Uso](https://edsavia.com.br/termos).
 
-**Responsável pelos dados (controlador):** Evandro Dias. Contato: edsideasfactory@gmail.com
+**Responsável pelos dados (controlador) e contato para assuntos de privacidade:** Evandro Dias — edsideasfactory@gmail.com
 
 > **Eu não leio o que você coloca no Avia.** Suas tarefas, anotações e registros do "Avia que alivia!" são seus. Eu, Evandro, não leio, não analiso e não uso esse conteúdo para nada além de fazer o app funcionar para você. Só acesso dados da sua conta se você me pedir ajuda com um problema e autorizar, ou se uma ordem judicial obrigar. E se você ativar a **criptografia ponta a ponta** (seção 4), isso deixa de ser só uma promessa: o texto passa a ser cifrado no seu aparelho e **nem eu consigo ler**.
 
@@ -17,6 +17,7 @@ Esta política explica quais dados o aplicativo **Avia** (Android e versão web 
 - **Registros do "Avia que alivia!":** os pensamentos que você escreve ou dita (até 500 caracteres cada), com título, data e hora.
 - **Compartilhamentos:** com quem você compartilhou um compromisso ou um registro e a situação do convite (pendente, aceito ou recusado).
 - **Dados técnicos:** um identificador do aparelho para envio de notificações (token de notificação).
+- **Na versão web:** o navegador guarda sua sessão, suas preferências (como o tema) e, se você ativar a criptografia, a chave dela, no armazenamento local do próprio navegador. Isso serve só para o app funcionar. Não usamos cookies de rastreamento nem de publicidade.
 
 **Não coletamos** localização, contatos, fotos ou arquivos do seu aparelho. Não usamos ferramentas de análise de uso, de rastreamento nem de publicidade.
 
@@ -28,6 +29,7 @@ Esta política explica quais dados o aplicativo **Avia** (Android e versão web 
 - Guardar e sincronizar seu conteúdo entre seus aparelhos e a versão web.
 - Enviar lembretes e avisos de compartilhamento.
 - Permitir que você compartilhe itens com outras pessoas, quando você escolher.
+- Proteger o serviço contra abusos (por exemplo, limitar tentativas seguidas de senha).
 - Responder a pedidos de suporte e de privacidade.
 
 A base legal é a execução do serviço que você contratou (art. 7º, V, da LGPD) e, para os registros do "Avia que alivia!", o seu consentimento (art. 11, I).
@@ -40,11 +42,14 @@ O "Avia que alivia!" é um espaço para registrar pensamentos e sentimentos. Ess
 - O conteúdo dos registros **não aparece** nas tarefas, na busca de tarefas nem nas notificações.
 - O conteúdo dos registros **não é gravado em registros de erro (logs)** do servidor.
 - Você pode **editar ou apagar** qualquer registro a qualquer momento.
-- Ao usar o "Avia que alivia!", você consente com o armazenamento desses registros para exibi-los a você e a quem você escolher compartilhar. Você pode retirar esse consentimento apagando os registros ou a conta.
+- Ao usar o "Avia que alivia!", você consente com o armazenamento desses registros (inclusive nos servidores descritos na seção 4) para exibi-los a você e a quem você escolher compartilhar. Você pode retirar esse consentimento apagando os registros ou a conta.
+
+O Avia não é um serviço de saúde e não substitui acompanhamento profissional.
 
 ## 4. Onde os dados ficam e como são protegidos
 
 - Os dados são guardados em servidores da **Cloudflare** e também no seu aparelho, para o app funcionar sem internet.
+- **Transferência internacional:** a Cloudflare, o Google e a Expo são empresas estrangeiras e podem tratar os dados em servidores fora do Brasil. Essa transferência é necessária para prestar o serviço que você contratou (art. 33, IX, da LGPD), e esses prestadores seguem padrões reconhecidos de segurança e de proteção de dados.
 - Toda a comunicação entre o app e o servidor é **criptografada (HTTPS)**.
 - **Criptografia ponta a ponta (opcional):** se você ativar a criptografia nas Configurações, o texto das suas tarefas e dos seus registros do "Avia que alivia!" é cifrado **no seu aparelho**, com uma frase secreta só sua, antes de ir para o servidor. Nem quem administra o Avia consegue ler esse conteúdo. Se você perder a frase secreta e o código de recuperação, não conseguimos recuperar o conteúdo. **Sem** essa opção ativada, o conteúdo fica protegido no transporte e no acesso à sua conta, mas é guardado no servidor sem essa camada extra.
 
@@ -61,13 +66,16 @@ Seus dados só são compartilhados quando **você** decide:
 
 - **Cloudflare:** hospedagem do servidor, do banco de dados e do site.
 - **Google:** login com conta Google; venda do app e processamento do pagamento pelo Google Play.
-- **Expo / Firebase (Google):** entrega das notificações. As notificações de compartilhamento dizem só *quem* compartilhou, nunca o conteúdo.
+- **Expo / Firebase (Google):** entrega das notificações. As notificações de compartilhamento dizem só *quem* compartilhou ou concluiu um compromisso, nunca o conteúdo.
 
 **Pagamento:** a compra do app é feita e processada pelo Google Play. O Avia não recebe nem guarda dados do seu cartão ou forma de pagamento.
 
 ## 6. Por quanto tempo guardamos
 
-Guardamos seus dados enquanto sua conta existir. Tarefas concluídas há mais de 6 meses podem ser movidas para um armazenamento de arquivo, sem serem apagadas. Quando você exclui a conta, os dados são apagados de forma definitiva dos nossos servidores na hora.
+- **Enquanto sua conta existir**, guardamos seus dados para o app funcionar.
+- **Tarefas concluídas há mais de 6 meses** podem ser movidas para um armazenamento de arquivo, sem serem apagadas.
+- **Tarefas que você apaga** somem de todos os seus aparelhos, mas o servidor guarda uma marcação de "apagada" para avisar seus outros aparelhos. Essa marcação, com o conteúdo da tarefa, só é removida quando você exclui a conta.
+- **Cópias de segurança** do banco de dados são guardadas por **até 30 dias**. Depois disso, o que foi apagado deixa de existir também nelas.
 
 ## 7. Exclusão da conta e dos dados
 
@@ -83,22 +91,31 @@ São apagados de forma definitiva:
 - **todos os registros do "Avia que alivia!" e os compartilhamentos deles, nos dois sentidos**;
 - os identificadores de notificação dos seus aparelhos.
 
+A exclusão do banco de dados principal é imediata. Das cópias de segurança, os dados somem em até 30 dias, e elas não são usadas para nada além de recuperar o serviço em caso de falha.
+
 ## 8. Seus direitos (LGPD, art. 18)
 
 Você pode pedir a qualquer momento:
 
-- confirmação e acesso aos seus dados;
-- correção de dados incompletos ou errados;
+- confirmação de que tratamos seus dados e acesso a eles;
+- correção de dados incompletos, errados ou desatualizados;
+- anonimização, bloqueio ou eliminação de dados desnecessários ou tratados em desacordo com a lei;
+- **portabilidade:** uma cópia dos seus dados em formato aberto (JSON), para levar a outro serviço;
 - exclusão dos dados;
-- revogação do consentimento;
-- informações sobre com quem os dados são compartilhados.
+- informações sobre com quem os dados são compartilhados;
+- informação sobre a possibilidade de não dar consentimento e o que acontece se você não der;
+- revogação do consentimento.
 
-Grande parte disso você faz direto no app (editar, apagar, desfazer compartilhamento, excluir conta). Para o resto, escreva para **edsideasfactory@gmail.com**. Respondemos em até 15 dias.
+Grande parte disso você faz direto no app (editar, apagar, desfazer compartilhamento, excluir conta). Para o resto, escreva para **edsideasfactory@gmail.com**. Respondemos em até 15 dias. Você também pode apresentar reclamação à **Autoridade Nacional de Proteção de Dados (ANPD)**.
 
-## 9. Idade mínima
+## 9. Incidentes de segurança
+
+Se acontecer um incidente de segurança que possa trazer risco ou dano relevante a você, avisaremos você e a ANPD, como a lei determina, explicando o que aconteceu, quais dados foram afetados e o que foi feito.
+
+## 10. Idade mínima
 
 O Avia é destinado a pessoas com **18 anos ou mais**. Não coletamos dados de menores de idade de forma consciente. Se você souber de alguém menor de 18 anos usando o app, escreva para edsideasfactory@gmail.com e apagaremos a conta.
 
-## 10. Mudanças nesta política
+## 11. Mudanças nesta política
 
 Se esta política mudar de forma importante, avisaremos no app e atualizaremos a data no topo desta página.
