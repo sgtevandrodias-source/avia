@@ -3,6 +3,9 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ItemCard } from '../components/ItemCard';
+import { BarraSelecao } from '../components/BarraSelecao';
+import { useTransferencias } from '../context/TransferenciasContext';
+import { useListaParaSelecao } from '../utils/useListaParaSelecao';
 import { useItems } from '../context/ItemsContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
@@ -36,6 +39,8 @@ export function ItensDaCategoriaScreen() {
     const concluidos = itensConcluidosOrdenados(daCategoria);
     return [...pendentes, ...concluidos];
   }, [itens, categoriaId]);
+  useListaParaSelecao(lista);
+  const { modoSelecao } = useTransferencias();
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -57,6 +62,8 @@ export function ItensDaCategoriaScreen() {
           </View>
         }
       />
+      {/* Esta tela abre por cima do menu lateral, onde fica a barra normal. */}
+      {modoSelecao && <BarraSelecao />}
     </SafeAreaView>
   );
 }

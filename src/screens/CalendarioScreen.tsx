@@ -18,6 +18,7 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ItemCard } from '../components/ItemCard';
+import { useListaParaSelecao } from '../utils/useListaParaSelecao';
 import { useItems } from '../context/ItemsContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { itemDeCompartilhamento } from '../utils/compartilhamentos';
@@ -153,7 +154,8 @@ export function CalendarioScreen() {
     return [...diasAntes, ...diasMes, ...diasDepois];
   }, [mesAtual]);
 
-  const itensDoDia = itensPorDia.get(diaSelecionado) ?? [];
+  const itensDoDia = useMemo(() => itensPorDia.get(diaSelecionado) ?? [], [itensPorDia, diaSelecionado]);
+  useListaParaSelecao(itensDoDia);
   const dataSelecionadaObj = parseISO(diaSelecionado);
 
   return (

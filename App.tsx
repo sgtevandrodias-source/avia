@@ -10,9 +10,11 @@ import { ItemsProvider } from './src/context/ItemsContext';
 import { CategoriasProvider } from './src/context/CategoriasContext';
 import { CompartilhamentosProvider } from './src/context/CompartilhamentosContext';
 import { AliviaProvider } from './src/context/AliviaContext';
+import { TransferenciasProvider } from './src/context/TransferenciasContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { SplashAnimado } from './src/components/SplashAnimado';
+import { MenuTarefa } from './src/components/MenuTarefa';
 import { useAviaFonts } from './src/theme/typography';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { configurarCanalAndroid, solicitarPermissaoNotificacoes } from './src/notifications/notifications';
@@ -31,7 +33,11 @@ function Conteudo() {
           <CompartilhamentosProvider>
             <AliviaProvider>
               <ItemsProvider>
-                <RootNavigator />
+                <TransferenciasProvider>
+                  <RootNavigator />
+                  {/* Menu de "segurar o dedo" numa tarefa — aqui pra funcionar em qualquer tela. */}
+                  <MenuTarefa />
+                </TransferenciasProvider>
               </ItemsProvider>
             </AliviaProvider>
           </CompartilhamentosProvider>

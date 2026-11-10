@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ItemCard } from '../components/ItemCard';
+import { useListaParaSelecao } from '../utils/useListaParaSelecao';
 import { useItems } from '../context/ItemsContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
@@ -19,6 +20,7 @@ export function AtrasadosScreen() {
   const navigation = useNavigation<any>();
 
   const lista = useMemo(() => itensAtrasados(itens), [itens]);
+  useListaParaSelecao(lista);
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>

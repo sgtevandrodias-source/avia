@@ -5,6 +5,8 @@ import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigatio
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { CapturaRapida } from '../components/CapturaRapida';
+import { BarraSelecao } from '../components/BarraSelecao';
+import { useTransferencias } from '../context/TransferenciasContext';
 import { TopBar } from '../components/TopBar';
 import { HojeScreen } from '../screens/HojeScreen';
 import { AmanhaScreen } from '../screens/AmanhaScreen';
@@ -85,6 +87,7 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
   const { itens } = useItems();
   const { recebidos } = useCompartilhamentos();
   const { quantidadeConvitesPendentes: convitesAlivia } = useAlivia();
+  const { recebidas: transferenciasRecebidas } = useTransferencias();
   const quantidadeAtrasados = useMemo(() => itensAtrasados(itens).length, [itens]);
   const quantidadeConvitesPendentes = useMemo(
     () => recebidos.filter((c) => c.status === 'pendente').length,
@@ -119,7 +122,9 @@ function ConteudoDrawer(props: DrawerContentComponentProps) {
               ? quantidadeConvitesPendentes
               : item.rota === 'Alivia'
                 ? convitesAlivia
-                : 0;
+                : item.rota === 'Hoje'
+                  ? transferenciasRecebidas.length
+                  : 0;
         return (
           <Pressable
             key={item.rota}
@@ -150,6 +155,7 @@ function DrawerNavigator() {
   const [rotaAtiva, setRotaAtiva] = useState('Hoje');
   const configuracoesTopBar = useMemo(() => configTopBar(corPorPeriodo), [corPorPeriodo]);
   const configTopo = configuracoesTopBar[rotaAtiva] ?? configuracoesTopBar.Hoje;
+  const { modoSelecao } = useTransferencias();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -218,10 +224,18 @@ function DrawerNavigator() {
         {/* No "Avia que alivia!" o campo de TAREFAS some (a tela tem o próprio
             campo de registro no rodapé, ver AliviaScreen) — evita criar uma
             tarefa por engano quando a intenção era registrar um pensamento. */}
-        {rotaAtiva !== 'Alivia' && (
+        {/* No modo de seleção (mover tarefas para outra conta), a barra de
+            seleção ocupa o lugar do campo de nova tarefa. */}
+        {modoSelecao ? (
           <View style={{ backgroundColor: colors.surface, paddingBottom: tecladoAberto ? 0 : insets.bottom }}>
-            <CapturaRapida />
+            <BarraSelecao />
           </View>
+        ) : (
+          rotaAtiva !== 'Alivia' && (
+            <View style={{ backgroundColor: colors.surface, paddingBottom: tecladoAberto ? 0 : insets.bottom }}>
+              <CapturaRapida />
+            </View>
+          )
         )}
       </KeyboardAvoidingView>
     </View>
