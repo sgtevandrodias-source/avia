@@ -3,6 +3,7 @@ import { semearCategoriasPadrao } from './categoriasPadrao';
 import { gerarOcorrenciasPendentesNoServidor } from './recorrencia';
 import { arquivarItensAntigos } from './arquivamento';
 import { apagarPensamentosDaConta, tratarPensamentos } from './pensamentos';
+import { apagarTransferenciasDaConta, itensQueSairamDaConta, tratarTransferencias } from './transferencias';
 
 // Binding de limite de tentativas da Cloudflare ([[ratelimits]] em
 // wrangler.toml). Tipado à mão e opcional de propósito: se o binding não
@@ -1191,6 +1192,9 @@ async function excluirContaCompleta(env: Env, usuarioId: string): Promise<void> 
   // Registros e compartilhamentos do "Avia que alivia!" (ver pensamentos.ts).
   await apagarPensamentosDaConta(env.DB, usuarioId);
 
+  // Pedidos de transferência da conta (ver transferencias.ts).
+  await apagarTransferenciasDaConta(env.DB, usuarioId);
+
   await env.DB.batch([
     env.DB.prepare('DELETE FROM items WHERE usuario_id = ?').bind(usuarioId),
     env.DB.prepare('DELETE FROM categorias WHERE usuario_id = ?').bind(usuarioId),
@@ -1375,6 +1379,16 @@ export default {
         return await tratarPensamentos(request, env, usuarioId, partes, url, { json, enviarPush });
       }
 
+      // Transferência de tarefas entre contas — rotas novas, isoladas em transferencias.ts.
+      if (partes[0] === 'transferencias') {
+        return await tratarTransferencias(request, env, usuarioId, partes, {
+          json,
+          enviarPush,
+          dentroDoLimite,
+          respostaLimiteExcedido,
+        });
+      }
+
       if (partes[0] !== 'items') {
         return json({ erro: 'Rota não encontrada' }, 404);
       }
@@ -1404,7 +1418,35 @@ export default {
               usuarioId,
             );
         const { results } = await stmt.all<ItemRow>();
-        return json({ itens: results.map(rowParaApi), servidorEm });
+        const itens = results.map(rowParaApi);
+        // Tarefas que saíram desta conta por transferência chegam como
+        // exclusão comum — o app (inclusive versões antigas) apaga sozinho.
+        if (since) {
+          for (const saiu of await itensQueSairamDaConta(env.DB, usuarioId, since)) {
+            itens.push({
+              id: saiu.id,
+              textoOriginal: '',
+              titulo: '',
+              data: '',
+              horaCompromisso: null,
+              horaLimite: null,
+              tipoHorario: 'nenhum',
+              categoria: 'outro',
+              status: 'pendente',
+              recorrencia: 'nenhuma',
+              lembreteOffsetMinutos: 0,
+              prioridade: false,
+              origemRecorrenciaId: null,
+              recorrenciaGeradaAte: null,
+              notas: null,
+              criadoEm: saiu.atualizadoEm,
+              concluidoEm: null,
+              atualizadoEm: saiu.atualizadoEm,
+              excluido: true,
+            });
+          }
+        }
+        return json({ itens, servidorEm });
       }
 
       // GET /items/:id
