@@ -93,7 +93,10 @@ export async function criarJwt(payload: SessaoPayload, segredo: string): Promise
   return `${cabecalhoCorpo}.${base64UrlCodificar(assinatura)}`;
 }
 
-export async function verificarJwt(token: string, segredo: string): Promise<SessaoPayload | null> {
+export async function verificarJwt(
+  token: string,
+  segredo: string,
+): Promise<(SessaoPayload & { iat: number }) | null> {
   const partes = token.split('.');
   if (partes.length !== 3) return null;
   const [cabecalhoB64, corpoB64, assinaturaB64] = partes;
@@ -110,7 +113,7 @@ export async function verificarJwt(token: string, segredo: string): Promise<Sess
 
     const corpo = JSON.parse(new TextDecoder().decode(base64UrlDecodificar(corpoB64)));
     if (typeof corpo.exp === 'number' && corpo.exp < Math.floor(Date.now() / 1000)) return null;
-    return { sub: corpo.sub, email: corpo.email, nome: corpo.nome };
+    return { sub: corpo.sub, email: corpo.email, nome: corpo.nome, iat: typeof corpo.iat === 'number' ? corpo.iat : 0 };
   } catch {
     return null;
   }
@@ -140,6 +143,8 @@ async function buscarJwksGoogle(): Promise<GoogleJwk[]> {
 export interface GoogleIdTokenPayload {
   sub: string;
   email: string;
+  // O Google manda booleano; aceita também a string por segurança.
+  email_verified?: boolean | string;
   name: string;
   picture?: string;
   aud: string;

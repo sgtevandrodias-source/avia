@@ -1,0 +1,13 @@
+-- Segurança: permite "desconectar todos os aparelhos" de uma conta.
+-- Sessões (JWT) emitidas ANTES deste instante (segundos desde 1970, mesmo
+-- formato do campo iat do JWT) passam a ser recusadas. NULL = todas valem,
+-- então contas existentes não mudam nada até alguém trocar a senha.
+-- Preenchido ao trocar a senha e ao juntar uma conta com o Google
+-- (ver tratarAuth/tratarUsuario em src/index.ts).
+--
+-- Só ACRESCENTA uma coluna. Aplicar com:
+--   npx wrangler d1 execute avia-db --local  --file=migrations/0020_sessoes_validas_desde.sql
+--   npx wrangler d1 execute avia-db --remote --file=migrations/0020_sessoes_validas_desde.sql
+-- (nunca `migrations apply`: a tabela d1_migrations de produção está
+-- desatualizada desde a 0012). Aplicar ANTES de publicar o Worker.
+ALTER TABLE usuarios ADD COLUMN sessoes_validas_desde INTEGER;

@@ -1,6 +1,6 @@
 const CACHE_NAME = 'avia-shell-v1';
 const CORE_ASSETS = ['/', '/favicon.ico', '/manifest.json'];
-const PAGINAS_ESTATICAS = ['/privacidade', '/excluir-conta'];
+const PAGINAS_ESTATICAS = ['/privacidade', '/excluir-conta', '/termos'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -33,7 +33,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          caches.open(CACHE_NAME).then((cache) => cache.put('/', response.clone()));
+          // Copia ANTES de devolver: depois que a página lê a resposta, ela
+          // não pode mais ser copiada (dava "Response body is already used").
+          const copia = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/', copia));
           return response;
         })
         .catch(() => caches.match('/'))
@@ -46,7 +49,8 @@ self.addEventListener('fetch', (event) => {
       const networkFetch = fetch(request)
         .then((response) => {
           if (response.ok) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+            const copia = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
           }
           return response;
         })
