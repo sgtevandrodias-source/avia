@@ -61,3 +61,11 @@ aviatoken.txt
 # Backups do D1 (wrangler d1 export) — têm os dados de TODOS os usuários;
 # nunca podem ir pro Git nem pro pacote do build.
 backup-*.sql
+# Backups cifrados (scripts/backup) — ficam fora do projeto, mas por via das dúvidas.
+*.aviabkp
+
+# Segredos de teste do wrangler dev (worker/.dev.vars)
+.dev.vars
+
+# Anotações pessoais com dados de contas de teste
+conta teste avia.txt
