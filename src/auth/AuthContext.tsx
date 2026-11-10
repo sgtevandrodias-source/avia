@@ -1,5 +1,8 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Alert, Platform } from 'react-native';
 import { API_URL } from '../sync/config';
+import { navegarPara } from '../navigation/navigationRef';
+import { aoExpirarSessao, reiniciarAvisoDeSessao } from './sessaoExpirada';
 import {
   alternarSessaoParaUsuario,
   prepararSessaoParaUsuario,
@@ -48,7 +51,8 @@ interface AuthContextValue {
   registrar: (email: string, senha: string, nome: string) => Promise<void>;
   login: (email: string, senha: string) => Promise<void>;
   loginComGoogle: () => Promise<void>;
-  definirSenha: (senha: string) => Promise<void>;
+  /** `senhaAtual` é obrigatória pra TROCAR a senha; vazia só na primeira senha de quem entra com Google. */
+  definirSenha: (senha: string, senhaAtual?: string) => Promise<void>;
   logout: () => Promise<void>;
   alternarConta: (usuarioId: string) => Promise<void>;
   removerConta: (usuarioId: string) => Promise<void>;
@@ -122,6 +126,24 @@ async function salvarContasSalvas(estado: ContasSalvas): Promise<void> {
   await salvarSessao(JSON.stringify(estado));
 }
 
+const TITULO_SESSAO_EXPIRADA = 'Entre de novo';
+const MENSAGEM_SESSAO_EXPIRADA =
+  'Sua sessão neste aparelho expirou (por exemplo, porque a senha foi trocada em outro aparelho). ' +
+  'As tarefas deste aparelho continuam guardadas e voltam a sincronizar quando você entrar de novo com a mesma conta.';
+
+/** Pergunta se a pessoa quer entrar de novo agora; "Entrar" abre a tela de login por cima do app. */
+function avisarSessaoExpirada(): void {
+  const abrirLogin = () => navegarPara('AdicionarConta');
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${TITULO_SESSAO_EXPIRADA}\n\n${MENSAGEM_SESSAO_EXPIRADA}`)) abrirLogin();
+    return;
+  }
+  Alert.alert(TITULO_SESSAO_EXPIRADA, MENSAGEM_SESSAO_EXPIRADA, [
+    { text: 'Agora não', style: 'cancel' },
+    { text: 'Entrar', onPress: abrirLogin },
+  ]);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -130,6 +152,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [erro, setErro] = useState<string | null>(null);
   const [criptografiaBloqueada, setCriptografiaBloqueada] = useState(false);
   const [criptografiaConfigurada, setCriptografiaConfigurada] = useState<boolean | null>(null);
+
+  // Servidor recusou a sessão (401) — ver sessaoExpirada.ts. Só avisa com
+  // alguém logado; o ref evita registrar o ouvinte de novo a cada render.
+  const usuarioRef = useRef<Usuario | null>(null);
+  usuarioRef.current = usuario;
+  useEffect(() => {
+    aoExpirarSessao(() => {
+      if (usuarioRef.current) avisarSessaoExpirada();
+    });
+    return () => aoExpirarSessao(null);
+  }, []);
 
   // Depois de restaurar sessão OU logar: se a conta tem criptografia
   // configurada no servidor mas este aparelho não tem a DEK em cache, marca
@@ -166,6 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const ativa = estado.contas.find((c) => c.usuario.id === estado.ativoId);
         if (ativa) {
           definirTokenAtual(ativa.token);
+          reiniciarAvisoDeSessao();
           // Precisa apontar pro arquivo SQLite certo ANTES de setUsuario —
           // é só depois que usuario deixa de ser null que o resto da árvore
           // (Categorias/Compartilhamentos/Items providers) monta e começa a
@@ -194,6 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setContas(novoEstado.contas.map((c) => c.usuario));
 
       definirTokenAtual(sessao.token);
+      reiniciarAvisoDeSessao();
       // Cada conta tem seu próprio arquivo SQLite local (ver
       // definirUsuarioAtivo em database.ts) — prepararSessaoParaUsuario só
       // troca pra ele e força uma sincronização completa, sem risco de
@@ -216,6 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await salvarContasSalvas({ ...estado, ativoId: usuarioId });
 
       definirTokenAtual(alvo.token);
+      reiniciarAvisoDeSessao();
       await alternarSessaoParaUsuario(alvo.usuario.id);
       setToken(alvo.token);
       setUsuario(alvo.usuario);
@@ -263,6 +299,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (eraAtiva) {
         const novaAtiva = restantes[0];
         definirTokenAtual(novaAtiva.token);
+        reiniciarAvisoDeSessao();
         await alternarSessaoParaUsuario(novaAtiva.usuario.id);
         setToken(novaAtiva.token);
         setUsuario(novaAtiva.usuario);
@@ -314,23 +351,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [salvar]);
 
-  const definirSenha = useCallback(async (senha: string) => {
-    setErro(null);
-    const resposta = await fetch(`${API_URL}/usuario/senha`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${obterTokenAtual()}`,
-      },
-      body: JSON.stringify({ senha }),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) {
-      const mensagem = dados?.erro ?? 'Não foi possível definir a senha.';
-      setErro(mensagem);
-      throw new Error(mensagem);
-    }
-  }, []);
+  const definirSenha = useCallback(
+    async (senha: string, senhaAtual?: string) => {
+      setErro(null);
+      const resposta = await fetch(`${API_URL}/usuario/senha`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${obterTokenAtual()}`,
+        },
+        body: JSON.stringify(senhaAtual ? { senha, senhaAtual } : { senha }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok) {
+        const mensagem = dados?.erro ?? 'Não foi possível definir a senha.';
+        setErro(mensagem);
+        throw new Error(mensagem);
+      }
+      // Na TROCA de senha o servidor desconecta todos os aparelhos e manda
+      // uma sessão nova só pra este — sem guardá-la, este aparelho também
+      // cairia na próxima sincronização.
+      if (typeof dados?.token === 'string' && usuario) {
+        const estado = await lerContasSalvas();
+        await salvarContasSalvas({
+          ...estado,
+          contas: estado.contas.map((c) => (c.usuario.id === usuario.id ? { ...c, token: dados.token } : c)),
+        });
+        definirTokenAtual(dados.token);
+        reiniciarAvisoDeSessao();
+        setToken(dados.token);
+      }
+    },
+    [usuario],
+  );
 
   /**
    * Apaga a conta DE VERDADE — servidor primeiro (item por item, categorias,

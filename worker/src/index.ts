@@ -15,7 +15,6 @@ interface Limitador {
 export interface Env {
   DB: D1Database;
   ARQUIVO: R2Bucket;
-  API_KEY: string;
   JWT_SECRET: string;
   GOOGLE_CLIENT_ID: string;
   LIMITE_LOGIN?: Limitador;
@@ -77,6 +76,7 @@ interface UsuarioRow {
   google_sub: string | null;
   foto_url: string | null;
   criado_em: string;
+  sessoes_validas_desde?: number | null; // migrations/0020
 }
 
 // Envelope de criptografia ponta a ponta (ver worker/migrations/0013_cifra.sql).
@@ -491,12 +491,27 @@ async function autenticar(request: Request, env: Env): Promise<string | null> {
   const token = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return null;
 
-  // Fallback administrativo: a API_KEY antiga continua funcionando, escopada
-  // no usuario "legado" (dados de antes da autenticacao existir).
-  if (env.API_KEY && token === env.API_KEY) return 'legado';
+  // (A antiga chave administrativa API_KEY, que dava acesso à conta
+  // "legado", foi desativada — ela chegou a ir dentro de builds antigos.)
 
   const payload = await verificarJwt(token, env.JWT_SECRET);
-  return payload?.sub ?? null;
+  if (!payload) return null;
+
+  // Confere a conta no banco a cada chamada: recusa sessão de conta já
+  // excluída e sessão emitida antes de uma troca de senha ("desconectar os
+  // outros aparelhos"). SELECT * de propósito: se a migração 0020 ainda não
+  // tiver sido aplicada, a coluna só vem ausente, sem derrubar o login.
+  const conta = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?')
+    .bind(payload.sub)
+    .first<UsuarioRow>();
+  if (!conta) return null;
+  if (conta.sessoes_validas_desde && payload.iat < conta.sessoes_validas_desde) return null;
+  return payload.sub;
+}
+
+/** Instante atual no formato do campo iat do JWT (segundos). */
+function agoraEmSegundos(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 // Teto pra senha: evita gastar o PBKDF2 com textos enormes de propósito.
@@ -588,10 +603,20 @@ async function tratarAuth(request: Request, env: Env, rota: string): Promise<Res
         return json({ erro: 'Já existe uma conta com esse e-mail. Entre com e-mail e senha.' }, 409);
       }
       if (usuario) {
-        await env.DB.prepare('UPDATE usuarios SET google_sub = ?, foto_url = ? WHERE id = ?')
-          .bind(payload.sub, payload.picture ?? null, usuario.id)
+        // Juntando uma conta de e-mail+senha com o Google pela primeira vez.
+        // O Google acabou de provar quem é o dono do e-mail; a senha e as
+        // sessões que já existiam podem ter sido criadas por OUTRA pessoa
+        // (alguém que cadastrou o e-mail alheio antes do dono). Por isso a
+        // senha é apagada e as sessões anteriores deixam de valer — o dono
+        // pode criar uma senha nova em Configurações. A sessão devolvida
+        // abaixo é emitida depois disso, então continua valendo.
+        await env.DB.prepare(
+          'UPDATE usuarios SET google_sub = ?, foto_url = ?, senha_hash = NULL, sessoes_validas_desde = ? WHERE id = ?',
+        )
+          .bind(payload.sub, payload.picture ?? null, agoraEmSegundos(), usuario.id)
           .run();
         usuario.foto_url = payload.picture ?? null;
+        usuario.senha_hash = null;
       } else {
         const id = crypto.randomUUID();
         await env.DB.prepare(
@@ -1194,16 +1219,42 @@ async function tratarUsuario(request: Request, env: Env, usuarioId: string, rota
   }
 
   if (rota === 'senha' && request.method === 'POST') {
-    const { senha } = (await request.json()) as { senha?: string };
+    const { senha, senhaAtual } = (await request.json()) as { senha?: string; senhaAtual?: string };
     if (typeof senha !== 'string' || senha.length < SENHA_MIN) {
       return json({ erro: `A senha precisa ter pelo menos ${SENHA_MIN} caracteres` }, 400);
     }
     if (senha.length > SENHA_MAX) {
       return json({ erro: `A senha pode ter no máximo ${SENHA_MAX} caracteres` }, 400);
     }
+    if (!(await dentroDoLimite(env.LIMITE_LOGIN, `senha:${usuarioId}`))) {
+      return respostaLimiteExcedido();
+    }
+    const conta = await env.DB.prepare('SELECT * FROM usuarios WHERE id = ?').bind(usuarioId).first<UsuarioRow>();
+    if (!conta) return json({ erro: 'Não autorizado' }, 401);
     const senhaHash = await hashSenha(senha);
-    await env.DB.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').bind(senhaHash, usuarioId).run();
-    return json({ ok: true });
+
+    // Conta só com Google (sem senha ainda): é a primeira senha — não há o
+    // que conferir nem motivo pra derrubar as outras sessões.
+    if (!conta.senha_hash) {
+      await env.DB.prepare('UPDATE usuarios SET senha_hash = ? WHERE id = ?').bind(senhaHash, usuarioId).run();
+      return json({ ok: true });
+    }
+
+    // TROCA de senha: exige a senha atual (quem pegar um celular
+    // desbloqueado não consegue trocar) e desconecta os outros aparelhos.
+    // Apps antigos não mandam senhaAtual — recebem o pedido pra atualizar.
+    if (typeof senhaAtual !== 'string' || !senhaAtual) {
+      return json({ erro: 'Para trocar a senha, atualize o Avia para a versão mais recente.' }, 400);
+    }
+    if (senhaAtual.length > SENHA_MAX || !(await verificarSenha(senhaAtual, conta.senha_hash))) {
+      return json({ erro: 'A senha atual está incorreta.' }, 403);
+    }
+    await env.DB.prepare('UPDATE usuarios SET senha_hash = ?, sessoes_validas_desde = ? WHERE id = ?')
+      .bind(senhaHash, agoraEmSegundos(), usuarioId)
+      .run();
+    // Sessão nova pra ESTE aparelho continuar conectado.
+    const token = await criarJwt({ sub: conta.id, email: conta.email, nome: conta.nome }, env.JWT_SECRET);
+    return json({ ok: true, token });
   }
 
   if (rota === 'cifra' && request.method === 'GET') {

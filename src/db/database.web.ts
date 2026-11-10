@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import type { CategoriaItem, Item, ItemCompartilhadoLocal, NovaCategoria, NovoItem } from '../types/item';
 import { obterTokenAtual } from '../auth/sessionToken';
+import { conferirRespostaDaSessao } from '../auth/sessaoExpirada';
 import { cifrarItemParaEnvio, decifrarItemRecebido } from '../crypto/itemCriptografia';
 import { API_URL } from '../sync/config';
 
@@ -18,6 +19,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...options?.headers,
     },
   });
+  conferirRespostaDaSessao(resposta);
   if (!resposta.ok) throw new Error(`Falha na API: ${resposta.status}`);
   return resposta.json();
 }

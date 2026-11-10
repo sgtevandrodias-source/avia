@@ -1,5 +1,6 @@
 import * as db from '../db/database';
 import { obterTokenAtual } from '../auth/sessionToken';
+import { conferirRespostaDaSessao } from '../auth/sessaoExpirada';
 import { cancelarNotificacoesDoItem } from '../notifications/notifications';
 import { cifrarItemParaEnvio, decifrarItemRecebido } from '../crypto/itemCriptografia';
 import { API_URL } from './config';
@@ -34,11 +35,13 @@ async function fetchComTimeout(url: string, opcoes?: RequestInit): Promise<Respo
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    return await fetch(url, {
+    const resposta = await fetch(url, {
       ...opcoes,
       headers: { ...opcoes?.headers, Authorization: `Bearer ${token}` },
       signal: controller.signal,
     });
+    conferirRespostaDaSessao(resposta);
+    return resposta;
   } finally {
     clearTimeout(timeout);
   }

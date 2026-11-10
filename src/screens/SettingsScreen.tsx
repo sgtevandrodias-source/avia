@@ -30,6 +30,7 @@ export function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { sincronizando, sincronizarAgora } = useItems();
   const { usuario, contas, logout, definirSenha, criptografiaConfigurada, criptografiaBloqueada } = useAuth();
+  const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [salvandoSenha, setSalvandoSenha] = useState(false);
@@ -94,10 +95,16 @@ export function SettingsScreen() {
     }
     setSalvandoSenha(true);
     try {
-      await definirSenha(novaSenha);
+      const trocando = senhaAtual.length > 0;
+      await definirSenha(novaSenha, trocando ? senhaAtual : undefined);
+      setSenhaAtual('');
       setNovaSenha('');
       setConfirmaSenha('');
-      avisar('Senha definida', 'Agora você já pode entrar com seu e-mail e essa senha em outros aparelhos, como no site.');
+      if (trocando) {
+        avisar('Senha trocada', 'Pronto! Os outros aparelhos e o site vão pedir para você entrar de novo com a senha nova.');
+      } else {
+        avisar('Senha definida', 'Agora você já pode entrar com seu e-mail e essa senha em outros aparelhos, como no site.');
+      }
     } catch (e) {
       avisar('Não foi possível salvar', e instanceof Error ? e.message : 'Tente de novo em alguns instantes.');
     } finally {
@@ -130,14 +137,23 @@ export function SettingsScreen() {
         <Text style={styles.linkExcluirContaTexto}>Excluir conta e todos os dados</Text>
       </Pressable>
 
-      <Text style={styles.secao}>Definir senha</Text>
+      <Text style={styles.secao}>Senha</Text>
       <View style={styles.cartaoSenha}>
         <Text style={styles.textoAjudaSenha}>
           Quem entra com Google só consegue usar o app no celular. Defina uma senha aqui pra também poder entrar
-          com seu e-mail em outros lugares, como no site.
+          com seu e-mail em outros lugares, como no site. Para trocar uma senha que você já tem, digite também a
+          senha atual — os outros aparelhos serão desconectados.
         </Text>
         <TextInput
           style={styles.input}
+          value={senhaAtual}
+          onChangeText={setSenhaAtual}
+          placeholder="Senha atual (vazio se ainda não tem)"
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry
+        />
+        <TextInput
+          style={[styles.input, styles.inputComEspaco]}
           value={novaSenha}
           onChangeText={setNovaSenha}
           placeholder="Nova senha"
