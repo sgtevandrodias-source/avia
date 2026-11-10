@@ -54,10 +54,27 @@ function wrangler(args) {
     maxBuffer: 256 * 1024 * 1024,
   });
   if (r.status !== 0) {
-    const fim = `${r.stderr ?? ''}${r.stdout ?? ''}`.trim().split('\n').slice(-5).join(' | ');
-    throw new Error(`wrangler ${args.slice(0, 2).join(' ')} falhou (código ${r.status}): ${fim}`);
+    // Em erro o wrangler imprime a lista de permissões da conta no fim;
+    // a mensagem que interessa é a linha marcada com ✘/ERROR.
+    const linhas = `${r.stderr ?? ''}\n${r.stdout ?? ''}`.split('\n').map((l) => l.trim()).filter(Boolean);
+    const erro = linhas.filter((l) => /✘|ERROR|\[code:/i.test(l)).slice(0, 3);
+    const resumo = (erro.length ? erro : linhas.slice(-3)).join(' | ').slice(0, 400);
+    throw new Error(`wrangler ${args.slice(0, 2).join(' ')} falhou (código ${r.status}): ${resumo}`);
   }
   return r.stdout;
+}
+
+/** A API de exportação da Cloudflare às vezes falha de forma passageira — tenta até 3 vezes. */
+function comNovasTentativas(acao) {
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      return acao();
+    } catch (erro) {
+      if (tentativa >= 3) throw erro;
+      registrar(`aviso: tentativa ${tentativa} falhou, tentando de novo em 30s — ${erro instanceof Error ? erro.message : erro}`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 30_000);
+    }
+  }
 }
 
 function lerSenha() {
@@ -118,7 +135,7 @@ function fazerBackup() {
   try {
     // 1. Banco de dados inteiro (só leitura).
     const arquivoSql = path.join(temp, 'banco.sql');
-    wrangler(['d1', 'export', BANCO, ALVO, '--output', arquivoSql, '--skip-confirmation']);
+    comNovasTentativas(() => wrangler(['d1', 'export', BANCO, ALVO, '--output', arquivoSql, '--skip-confirmation']));
     if (!fs.existsSync(arquivoSql) || fs.statSync(arquivoSql).size < 1000) {
       throw new Error('A exportação do banco veio vazia.');
     }
