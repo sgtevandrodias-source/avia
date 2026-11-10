@@ -193,16 +193,38 @@ async function receberCompartilhamentos(desde: string | null): Promise<string | 
   return servidorEm;
 }
 
+// Uma sincronização (ou limpeza de cache) por vez neste aparelho. Antes,
+// a sincronização automática de 20s podia rodar no MEIO de "Forçar
+// atualização completa": ela gravava o cursor antigo logo depois de o cache
+// ser apagado, e a ressincronização seguinte achava que já estava em dia —
+// as categorias (que quase nunca mudam no servidor) nunca mais voltavam e
+// toda tarefa aparecia como "Diversos". Agora cada chamada espera a vez.
+let fila: Promise<unknown> = Promise.resolve();
+
+function naVez<T>(tarefa: () => Promise<T>): Promise<T> {
+  const resultado = fila.then(tarefa, tarefa);
+  fila = resultado.catch(() => {});
+  return resultado;
+}
+
 /**
  * Sincroniza o SQLite local com o Worker Cloudflare. Nunca lança erro:
  * se estiver offline, sem sessão, ou o servidor falhar, apenas encerra
  * silenciosamente e tenta de novo na próxima chamada (o app continua
  * funcionando 100% local).
  */
-export async function sincronizar(): Promise<{ ok: boolean }> {
+export function sincronizar(): Promise<{ ok: boolean }> {
+  return naVez(sincronizarAgoraSemFila);
+}
+
+async function sincronizarAgoraSemFila(): Promise<{ ok: boolean }> {
   if (!obterTokenAtual()) return { ok: false };
   try {
-    const desdeCategorias = await db.getMeta(CHAVE_ULTIMA_SYNC_CATEGORIAS);
+    // Toda conta tem ao menos as 4 categorias fixas: cache local sem
+    // nenhuma é sempre sinal de problema (ver comentário de `fila` acima)
+    // — nesse caso ignora o cursor e baixa todas de novo.
+    const semCategoriasLocais = (await db.listarCategorias()).length === 0;
+    const desdeCategorias = semCategoriasLocais ? null : await db.getMeta(CHAVE_ULTIMA_SYNC_CATEGORIAS);
     await enviarExclusoesPendentesCategorias();
     await enviarAlteracoesLocaisCategorias(desdeCategorias);
     const servidorEmCategorias = await receberAlteracoesRemotasCategorias(desdeCategorias);
@@ -255,18 +277,22 @@ export async function forcarResyncCompleto(): Promise<void> {
  * ainda não enviada, pra não perder nada de verdade) e outra DEPOIS
  * (busca tudo de novo com o cache já vazio).
  */
-export async function limparCacheLocalERessincronizar(): Promise<void> {
-  await sincronizar();
-  // Com o cache vazio, a agenda entenderia que todas as tarefas foram excluídas
-  // e apagaria os eventos — fica suspensa até as tarefas voltarem.
-  pausarAgenda();
-  try {
-    await db.limparTudoLocal();
-    await forcarResyncCompleto();
-    await sincronizar();
-  } finally {
-    retomarAgenda();
-  }
+export function limparCacheLocalERessincronizar(): Promise<void> {
+  // Tudo dentro da MESMA vez da fila: nenhuma sincronização automática pode
+  // entrar entre apagar o cache e baixar tudo de novo.
+  return naVez(async () => {
+    await sincronizarAgoraSemFila();
+    // Com o cache vazio, a agenda entenderia que todas as tarefas foram excluídas
+    // e apagaria os eventos — fica suspensa até as tarefas voltarem.
+    pausarAgenda();
+    try {
+      await db.limparTudoLocal();
+      await forcarResyncCompleto();
+      await sincronizarAgoraSemFila();
+    } finally {
+      retomarAgenda();
+    }
+  });
 }
 
 /**
@@ -278,9 +304,13 @@ export async function limparCacheLocalERessincronizar(): Promise<void> {
  * dados de contas diferentes — só troca qual arquivo está ativo e força um
  * pull/push completo, já que essa sessão pode ser novidade neste aparelho.
  */
-export async function prepararSessaoParaUsuario(usuarioId: string): Promise<void> {
-  db.definirUsuarioAtivo(usuarioId);
-  await forcarResyncCompleto();
+export function prepararSessaoParaUsuario(usuarioId: string): Promise<void> {
+  // Espera a vez: uma sincronização da conta anterior ainda em andamento
+  // não pode terminar gravando no arquivo da conta nova.
+  return naVez(async () => {
+    db.definirUsuarioAtivo(usuarioId);
+    await forcarResyncCompleto();
+  });
 }
 
 /**
@@ -293,9 +323,12 @@ export async function prepararSessaoParaUsuario(usuarioId: string): Promise<void
  * mesmo com rede lenta (a tela já mostra o cache local na hora, e o
  * sincronizar() só complementa em segundo plano).
  */
-export async function alternarSessaoParaUsuario(usuarioId: string): Promise<void> {
-  db.definirUsuarioAtivo(usuarioId);
-  await sincronizar();
+export function alternarSessaoParaUsuario(usuarioId: string): Promise<void> {
+  // Mesmo raciocínio de prepararSessaoParaUsuario.
+  return naVez(async () => {
+    db.definirUsuarioAtivo(usuarioId);
+    await sincronizarAgoraSemFila();
+  });
 }
 
 /**
