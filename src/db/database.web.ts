@@ -24,12 +24,76 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return resposta.json();
 }
 
+// Cópia das tarefas na MEMÓRIA da página (some ao recarregar — nada fica
+// gravado no navegador). Antes, o site baixava a lista inteira a cada 20s
+// (sincronização automática), o que numa conta grande lia milhares de
+// linhas do banco por minuto e chegou perto do limite diário do D1. Agora
+// baixa tudo uma vez ao abrir e, depois, só o que mudou (?since=, com o
+// relógio do servidor como cursor — mesmo esquema do app do celular).
+let cache: { token: string | null; itens: Map<string, Item>; cursor: string; carregadoEm: number } | null = null;
+
+// Rede de segurança: a cada 30 min baixa a lista inteira de novo (corrige
+// qualquer coisa que o incremental tenha deixado passar). Ainda assim é
+// ~50x menos leitura do que antes (uma lista inteira a cada 20s).
+const RECARGA_COMPLETA_MS = 30 * 60 * 1000;
+// O cursor volta 2 min: uma tarefa editada num aparelho com o relógio um
+// pouco atrasado ganha um atualizadoEm "do passado" e não seria vista. Ler
+// de novo os poucos itens dos últimos 2 min é barato (índice
+// usuario_id+atualizado_em) e repetir um item não tem efeito.
+const MARGEM_CURSOR_MS = 2 * 60 * 1000;
+
+function cursorComMargem(servidorEm: string): string {
+  const ms = Date.parse(servidorEm);
+  return Number.isNaN(ms) ? servidorEm : new Date(ms - MARGEM_CURSOR_MS).toISOString();
+}
+
+/** Descarta a cópia em memória — a próxima leitura baixa tudo de novo. */
+export function descartarCacheDeItens(): void {
+  cache = null;
+}
+
+/** Depois de desbloquear a criptografia: decifra o que ficou guardado ainda cifrado. */
+export function redecifrarCacheDeItens(): void {
+  if (!cache) return;
+  for (const [id, item] of cache.itens) cache.itens.set(id, decifrarItemRecebido(item));
+}
+
+function guardarNoCache(item: Item): void {
+  if (cache && cache.token === obterTokenAtual()) cache.itens.set(item.id, item);
+}
+
+function ordenados(itens: Iterable<Item>): Item[] {
+  return [...itens].sort((a, b) => a.data.localeCompare(b.data));
+}
+
 export async function listarItens(): Promise<Item[]> {
-  // GET /items sem "since" devolve { itens, servidorEm } — o "servidorEm" só
-  // importa pro cursor incremental (ver src/sync/sync.ts); aqui só usamos a
-  // lista mesmo, já que o web não guarda cursor local nenhum.
-  const { itens } = await request<{ itens: Item[]; servidorEm: string }>('/items');
-  return itens.map((item) => decifrarItemRecebido(item)).sort((a, b) => a.data.localeCompare(b.data));
+  const token = obterTokenAtual();
+  // Outra conta (ou sessão nova): começa do zero.
+  if (!cache || cache.token !== token || Date.now() - cache.carregadoEm > RECARGA_COMPLETA_MS) {
+    const { itens, servidorEm } = await request<{ itens: Item[]; servidorEm: string }>('/items');
+    cache = {
+      token,
+      itens: new Map(itens.map((item) => [item.id, decifrarItemRecebido(item)])),
+      cursor: cursorComMargem(servidorEm),
+      carregadoEm: Date.now(),
+    };
+    return ordenados(cache.itens.values());
+  }
+
+  const atual = cache;
+  const { itens, servidorEm } = await request<{ itens: (Item & { excluido?: boolean })[]; servidorEm: string }>(
+    `/items?since=${encodeURIComponent(atual.cursor)}`,
+  );
+  if (cache !== atual) return ordenados((cache ?? atual).itens.values());
+  for (const recebido of itens) {
+    if (recebido.excluido) {
+      atual.itens.delete(recebido.id);
+    } else {
+      atual.itens.set(recebido.id, decifrarItemRecebido(recebido));
+    }
+  }
+  atual.cursor = cursorComMargem(servidorEm);
+  return ordenados(atual.itens.values());
 }
 
 export async function criarItem(novoItem: NovoItem): Promise<Item> {
@@ -47,12 +111,14 @@ export async function criarItem(novoItem: NovoItem): Promise<Item> {
     atualizadoEm: agora,
   };
   await request('/items', { method: 'POST', body: JSON.stringify(cifrarItemParaEnvio(item)) });
+  guardarNoCache(item);
   return item;
 }
 
 export async function atualizarItem(item: Item): Promise<void> {
   const atualizado: Item = { ...item, atualizadoEm: new Date().toISOString() };
   await request(`/items/${item.id}`, { method: 'PUT', body: JSON.stringify(cifrarItemParaEnvio(atualizado)) });
+  guardarNoCache(atualizado);
 }
 
 export async function marcarStatus(id: string, status: Item['status']): Promise<void> {
@@ -65,12 +131,14 @@ export async function marcarStatus(id: string, status: Item['status']): Promise<
     atualizadoEm: agora,
   };
   await request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
+  guardarNoCache(decifrarItemRecebido(atualizado));
 }
 
 export async function marcarPrioridade(id: string, prioridade: boolean): Promise<void> {
   const atual = await request<Item>(`/items/${id}`);
   const atualizado: Item = { ...atual, prioridade, atualizadoEm: new Date().toISOString() };
   await request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(atualizado) });
+  guardarNoCache(decifrarItemRecebido(atualizado));
 }
 
 export async function marcarRecorrenciaGeradaAte(id: string, data: string): Promise<void> {
@@ -82,6 +150,7 @@ export async function marcarRecorrenciaGeradaAte(id: string, data: string): Prom
 
 export async function excluirItem(id: string): Promise<void> {
   await request(`/items/${id}`, { method: 'DELETE' });
+  if (cache && cache.token === obterTokenAtual()) cache.itens.delete(id);
 }
 
 // Build web: sem cache local pra "tocar" — a migração pós-configuração de
@@ -154,7 +223,9 @@ export async function removerExclusaoPendenteCategoria(): Promise<void> {}
 
 // Build web: nunca teve cache local (cada operação já fala direto com a
 // API, escopada pelo token do usuário logado) — nada pra limpar.
-export async function limparTudoLocal(): Promise<void> {}
+export async function limparTudoLocal(): Promise<void> {
+  descartarCacheDeItens();
+}
 
 // Build web: não há arquivo SQLite por conta pra trocar/apagar — trocar de
 // conta aqui é só trocar qual token está ativo (ver sessionToken.ts).
