@@ -5,8 +5,10 @@ import { useNavigation } from '@react-navigation/native';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Constants from 'expo-constants';
+import { decidirEventosAoSair } from '../agenda/agenda';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
+import { SecaoAgenda } from '../components/SecaoAgenda';
 import { useItems } from '../context/ItemsContext';
 import { limparCacheLocalERessincronizar, obterStatusSincronizacao, type StatusSincronizacao } from '../sync/sync';
 import { useTheme, type PreferenciaTema } from '../theme/ThemeContext';
@@ -80,7 +82,10 @@ export function SettingsScreen() {
       outrasContasSalvas
         ? 'Vai remover essa conta deste aparelho — as outras salvas continuam disponíveis. Continuar?'
         : 'Tem certeza que deseja sair da sua conta?',
-      () => logout(),
+      async () => {
+        if (usuario && !(await decidirEventosAoSair(usuario.id, true))) return;
+        await logout();
+      },
     );
   };
 
@@ -245,6 +250,8 @@ export function SettingsScreen() {
           <Text style={styles.linkForcarResyncTexto}>Categorias ou tarefas desatualizadas? Forçar atualização completa</Text>
         )}
       </Pressable>
+
+      <SecaoAgenda />
 
       <Text style={styles.secao}>Aparência</Text>
       <View style={styles.linhaTema}>

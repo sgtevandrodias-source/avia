@@ -3,6 +3,7 @@ import { semearCategoriasPadrao } from './categoriasPadrao';
 import { gerarOcorrenciasPendentesNoServidor } from './recorrencia';
 import { arquivarItensAntigos } from './arquivamento';
 import { apagarPensamentosDaConta, tratarPensamentos } from './pensamentos';
+import { apagarTransferenciasDaConta, itensQueSairamDaConta, tratarTransferencias } from './transferencias';
 
 // Binding de limite de tentativas da Cloudflare ([[ratelimits]] em
 // wrangler.toml). Tipado à mão e opcional de propósito: se o binding não
@@ -485,6 +486,25 @@ async function sincronizarConclusaoCompartilhamentos(
   if (!linha) return;
 
   await enviarPushConclusaoCompartilhamento(db, linha.destinatario_id, linha.criador_nome, linha.id);
+}
+
+// Economia de leitura no D1: a geração de ocorrências lê todas as séries
+// ativas do usuário, e rodava em TODO GET /items (o app sincroniza a cada
+// 20s). Ela só cria algo novo quando o dia vira, então aqui roda no máximo
+// a cada 10 minutos por usuário (e sempre que o dia UTC muda). A memória é
+// da instância do Worker — se outra instância atender, ela simplesmente
+// roda de novo (é idempotente), nunca deixa de gerar.
+const INTERVALO_GERACAO_MS = 10 * 60 * 1000;
+const ultimaGeracao = new Map<string, { quando: number; dia: string }>();
+
+async function gerarOcorrenciasSeNecessario(db: D1Database, usuarioId: string): Promise<void> {
+  const agora = Date.now();
+  const dia = new Date(agora).toISOString().slice(0, 10);
+  const anterior = ultimaGeracao.get(usuarioId);
+  if (anterior && anterior.dia === dia && agora - anterior.quando < INTERVALO_GERACAO_MS) return;
+  await gerarOcorrenciasPendentesNoServidor(db, usuarioId);
+  if (ultimaGeracao.size > 5000) ultimaGeracao.clear();
+  ultimaGeracao.set(usuarioId, { quando: agora, dia });
 }
 
 async function autenticar(request: Request, env: Env): Promise<string | null> {
@@ -1191,6 +1211,9 @@ async function excluirContaCompleta(env: Env, usuarioId: string): Promise<void> 
   // Registros e compartilhamentos do "Avia que alivia!" (ver pensamentos.ts).
   await apagarPensamentosDaConta(env.DB, usuarioId);
 
+  // Pedidos de transferência da conta (ver transferencias.ts).
+  await apagarTransferenciasDaConta(env.DB, usuarioId);
+
   await env.DB.batch([
     env.DB.prepare('DELETE FROM items WHERE usuario_id = ?').bind(usuarioId),
     env.DB.prepare('DELETE FROM categorias WHERE usuario_id = ?').bind(usuarioId),
@@ -1375,6 +1398,16 @@ export default {
         return await tratarPensamentos(request, env, usuarioId, partes, url, { json, enviarPush });
       }
 
+      // Transferência de tarefas entre contas — rotas novas, isoladas em transferencias.ts.
+      if (partes[0] === 'transferencias') {
+        return await tratarTransferencias(request, env, usuarioId, partes, {
+          json,
+          enviarPush,
+          dentroDoLimite,
+          respostaLimiteExcedido,
+        });
+      }
+
       if (partes[0] !== 'items') {
         return json({ erro: 'Rota não encontrada' }, 404);
       }
@@ -1387,7 +1420,7 @@ export default {
         // que toda série ativa já tem a ocorrência de hoje (e quaisquer
         // atrasadas) geradas no D1. Os aparelhos nunca mais geram ocorrência
         // por conta própria — só consomem o que está aqui.
-        await gerarOcorrenciasPendentesNoServidor(env.DB, usuarioId);
+        await gerarOcorrenciasSeNecessario(env.DB, usuarioId);
         // Ver comentário equivalente em tratarCategorias: o cursor da próxima
         // sincronização tem que ser o relógio do SERVIDOR, não o do aparelho
         // — senão exclusões e ocorrências geradas aqui podem ficar com um
@@ -1404,7 +1437,35 @@ export default {
               usuarioId,
             );
         const { results } = await stmt.all<ItemRow>();
-        return json({ itens: results.map(rowParaApi), servidorEm });
+        const itens = results.map(rowParaApi);
+        // Tarefas que saíram desta conta por transferência chegam como
+        // exclusão comum — o app (inclusive versões antigas) apaga sozinho.
+        if (since) {
+          for (const saiu of await itensQueSairamDaConta(env.DB, usuarioId, since)) {
+            itens.push({
+              id: saiu.id,
+              textoOriginal: '',
+              titulo: '',
+              data: '',
+              horaCompromisso: null,
+              horaLimite: null,
+              tipoHorario: 'nenhum',
+              categoria: 'outro',
+              status: 'pendente',
+              recorrencia: 'nenhuma',
+              lembreteOffsetMinutos: 0,
+              prioridade: false,
+              origemRecorrenciaId: null,
+              recorrenciaGeradaAte: null,
+              notas: null,
+              criadoEm: saiu.atualizadoEm,
+              concluidoEm: null,
+              atualizadoEm: saiu.atualizadoEm,
+              excluido: true,
+            });
+          }
+        }
+        return json({ itens, servidorEm });
       }
 
       // GET /items/:id

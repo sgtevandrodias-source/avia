@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { decidirEventosAoSair } from '../agenda/agenda';
 import { useAuth, type Usuario } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { useTheme } from '../theme/ThemeContext';
@@ -34,6 +35,7 @@ export function ContasScreen() {
         ? `Isso vai te desconectar de "${conta.email}" neste aparelho. Continuar?`
         : `"${conta.email}" deixa de ficar salva neste aparelho — pra usar de novo, será preciso entrar outra vez. Continuar?`,
       async () => {
+        if (!(await decidirEventosAoSair(conta.id, conta.id === usuario?.id))) return;
         setProcessandoId(conta.id);
         try {
           await removerConta(conta.id);

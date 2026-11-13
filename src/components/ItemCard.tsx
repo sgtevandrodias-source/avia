@@ -7,12 +7,13 @@ import { CheckboxConcluir } from './CheckboxConcluir';
 import { useCategorias } from '../context/CategoriasContext';
 import { useItems } from '../context/ItemsContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
+import { useTransferencias } from '../context/TransferenciasContext';
 import { campoOuBloqueado } from '../crypto/itemCriptografia';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
 import { fonts } from '../theme/typography';
 import { dataHoraLimiteDoItem } from '../utils/periodos';
-import { confirmar } from '../utils/confirm';
+import { avisar, confirmar } from '../utils/confirm';
 import { categoriaInfo, type Item } from '../types/item';
 
 // Cor fixa (não muda entre tema claro/escuro, igual as cores de urgência)
@@ -36,21 +37,69 @@ interface Props {
 export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => criarEstilos(colors), [colors]);
-  const { alternarPrioridade, removerItem } = useItems();
+  const { removerItem } = useItems();
   const { alternarConclusaoCompartilhado, removerCompartilhamento } = useCompartilhamentos();
+  const {
+    modoSelecao,
+    selecionados,
+    alternarSelecao,
+    podeSelecionar,
+    abrirMenu,
+    transferenciaPendenteDoItem,
+    cancelarTransferencia,
+  } = useTransferencias();
   const titulo = campoOuBloqueado(item.titulo) ?? item.titulo;
   // Item vindo de um compartilhamento aceito (ver utils/compartilhamentos.ts)
   // — só quem criou o item de verdade pode editar/excluir/priorizar; aqui só
   // dá pra marcar como feito (do seu lado) ou remover da própria agenda.
   const somenteLeitura = item.somenteLeitura === true;
+  // Tarefa que eu mandei pra outra conta e ainda espera aceite: fica
+  // bloqueada (sem editar, concluir ou apagar) pra não dar conflito.
+  const transferencia = somenteLeitura ? undefined : transferenciaPendenteDoItem(item.id);
+  const selecionavel = podeSelecionar(item);
+  const selecionado = modoSelecao && selecionados.has(item.id);
 
-  const marcarPrioridade = () => {
-    if (somenteLeitura) return;
+  // Segurar o dedo: abre o menu (prioridade ou selecionar para mover).
+  const abrirMenuDaTarefa = () => {
+    if (somenteLeitura || modoSelecao || transferencia) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    alternarPrioridade(item.id);
+    abrirMenu(item);
+  };
+
+  const avisarBloqueada = () => {
+    if (!transferencia) return;
+    confirmar(
+      'Aguardando aceite',
+      `Esta tarefa está esperando ${transferencia.paraNome} aceitar. Quer cancelar a transferência? (Vale para todas as tarefas desse envio.)`,
+      () => {
+        cancelarTransferencia(transferencia.id).catch((e) =>
+          avisar('Transferência', e instanceof Error ? e.message : 'Não foi possível cancelar.'),
+        );
+      },
+    );
+  };
+
+  const tocar = () => {
+    if (modoSelecao) {
+      if (selecionavel) alternarSelecao(item.id);
+      return;
+    }
+    if (transferencia) {
+      avisarBloqueada();
+      return;
+    }
+    onPress();
   };
 
   const alternarConcluido = () => {
+    if (modoSelecao) {
+      if (selecionavel) alternarSelecao(item.id);
+      return;
+    }
+    if (transferencia) {
+      avisarBloqueada();
+      return;
+    }
     if (somenteLeitura) {
       alternarConclusaoCompartilhado(item.compartilhamentoId!);
     } else {
@@ -59,6 +108,10 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
   };
 
   const excluir = () => {
+    if (transferencia) {
+      avisarBloqueada();
+      return;
+    }
     if (somenteLeitura) {
       confirmar(
         'Remover da minha agenda',
@@ -107,11 +160,26 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
 
   return (
     <Pressable
-      onPress={onPress}
-      onLongPress={somenteLeitura ? undefined : marcarPrioridade}
-      style={[styles.card, item.prioridade && styles.cardPrioridade, atrasado && styles.cardAtrasado]}
+      onPress={tocar}
+      onLongPress={somenteLeitura ? undefined : abrirMenuDaTarefa}
+      style={[
+        styles.card,
+        item.prioridade && styles.cardPrioridade,
+        atrasado && styles.cardAtrasado,
+        modoSelecao && !selecionavel && styles.cardIndisponivel,
+        selecionado && styles.cardSelecionado,
+      ]}
+      accessibilityState={modoSelecao ? { selected: selecionado, disabled: !selecionavel } : undefined}
     >
-      <CheckboxConcluir concluido={concluido} corPendente={corPendente} onToggle={alternarConcluido} />
+      {modoSelecao ? (
+        <View
+          style={[styles.marcaSelecao, selecionado && styles.marcaSelecaoAtiva, !selecionavel && styles.marcaIndisponivel]}
+        >
+          {selecionado && <Ionicons name="checkmark" size={16} color={colors.white} />}
+        </View>
+      ) : (
+        <CheckboxConcluir concluido={concluido} corPendente={corPendente} onToggle={alternarConcluido} />
+      )}
       <Animated.View style={[styles.textos, { opacity: opacidadeTexto }]}>
         <Text
           style={[styles.titulo, concluido && styles.tituloConcluido]}
@@ -138,8 +206,12 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
           )}
           {atrasado && <Text style={styles.avisoAtrasado}>⚠️ Atrasado</Text>}
           {somenteLeitura && <Text style={styles.seloCompartilhado}>👥 de {item.compartilhadoPorNome}</Text>}
+          {transferencia && (
+            <Text style={styles.seloTransferencia}>⏳ Aguardando aceite de {transferencia.paraNome}</Text>
+          )}
         </View>
       </Animated.View>
+      {!modoSelecao && (
       <Pressable
         onPress={excluir}
         hitSlop={8}
@@ -149,6 +221,7 @@ export function ItemCard({ item, corPendente, onToggle, onPress }: Props) {
       >
         <Ionicons name={somenteLeitura ? 'exit-outline' : 'trash-outline'} size={20} color={colors.textMuted} />
       </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -220,6 +293,33 @@ function criarEstilos(colors: Paleta) {
     fontFamily: fonts.medium,
     fontSize: 12,
     color: colors.textMuted,
+  },
+  seloTransferencia: {
+    fontFamily: fonts.bold,
+    fontSize: 12,
+    color: colors.marca,
+  },
+  cardSelecionado: {
+    borderColor: colors.marca,
+    borderWidth: 2,
+  },
+  cardIndisponivel: {
+    opacity: 0.45,
+  },
+  marcaSelecao: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: colors.marca,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  marcaSelecaoAtiva: {
+    backgroundColor: colors.marca,
+  },
+  marcaIndisponivel: {
+    borderColor: colors.border,
   },
   });
 }

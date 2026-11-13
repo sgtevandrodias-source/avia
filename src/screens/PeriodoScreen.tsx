@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ItemCard } from '../components/ItemCard';
 import { ProgressoDoDia } from '../components/ProgressoDoDia';
+import { CartoesTransferencia } from '../components/CartoesTransferencia';
+import { useListaParaSelecao } from '../utils/useListaParaSelecao';
 import { useItems } from '../context/ItemsContext';
 import { useCompartilhamentos } from '../context/CompartilhamentosContext';
 import { itemDeCompartilhamento } from '../utils/compartilhamentos';
@@ -49,6 +51,8 @@ export function PeriodoScreen({ periodo }: Props) {
     return [...pendentes, ...concluidos];
   }, [todosOsItens, periodo]);
 
+  useListaParaSelecao(itensPeriodo);
+
   const totalHoje = itensPendentesHoje(todosOsItens).length + itensFeitosHoje(todosOsItens).length;
   const feitosHoje = itensFeitosHoje(todosOsItens).length;
 
@@ -59,6 +63,7 @@ export function PeriodoScreen({ periodo }: Props) {
         data={itensPeriodo}
         keyExtractor={(item: Item) => item.id}
         contentContainerStyle={styles.lista}
+        ListHeaderComponent={periodo === 'hoje' ? <CartoesTransferencia /> : null}
         renderItem={({ item }) => (
           <ItemCard
             item={item}

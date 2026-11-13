@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { decidirEventosAoSair } from '../agenda/agenda';
 import { useAuth } from '../auth/AuthContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
@@ -19,7 +20,8 @@ export function ExcluirContaScreen() {
   const emailConfere = usuario != null && emailDigitado.trim().toLowerCase() === usuario.email.toLowerCase();
 
   const confirmarExclusao = async () => {
-    if (!emailConfere || excluindo) return;
+    if (!usuario || !emailConfere || excluindo) return;
+    if (!(await decidirEventosAoSair(usuario.id, true))) return;
     setExcluindo(true);
     try {
       await excluirConta();

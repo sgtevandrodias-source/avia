@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ItemCard } from '../components/ItemCard';
+import { useListaParaSelecao } from '../utils/useListaParaSelecao';
 import { useItems } from '../context/ItemsContext';
 import { useTheme } from '../theme/ThemeContext';
 import type { Paleta } from '../theme/paletas';
@@ -35,6 +36,8 @@ export function HistoricoScreen() {
     }
     return Array.from(grupos.entries()).map(([title, data]) => ({ title, data }));
   }, [itens]);
+  const todosDaTela = useMemo(() => secoes.flatMap((s) => s.data), [secoes]);
+  useListaParaSelecao(todosDaTela);
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
