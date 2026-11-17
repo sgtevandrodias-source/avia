@@ -39,6 +39,7 @@ App de **agenda, tarefas e lembretes** em português. A pessoa fala ou digita ("
 3. Por volta de **29/11/2026**: **pedir acesso à produção** (Painel → Produção → "Solicitar a produção"). O Google faz perguntas sobre o teste fechado, e a análise leva alguns dias.
 4. **Reembolso dos R$ 1,49** aos testadores, quando o Evandro quiser (Play Console → Monetizar → Pedidos).
 5. Antes da produção, revisar as **pendências de segurança/LGPD** (seção 9).
+6. **Fim de semana de 21–22/11/2026:** fazer a fase A do **Plano de confiabilidade e escala** (seção 9A). Começar pela assinatura do Workers Paid.
 
 ---
 
@@ -161,6 +162,39 @@ App de **agenda, tarefas e lembretes** em português. A pessoa fala ou digita ("
 - Restam 5 alertas de dependências do build, que exigem uma versão maior do Expo.
 
 **Ideias de melhoria:** ver `AVALIACAO_E_MELHORIAS.md`.
+
+---
+
+## 9A. Plano de confiabilidade e escala
+
+**Meta do Evandro:** pelo menos **10.000 downloads em 1 ano**, sem deixar ninguém na mão (sem queda e sem perda de dados). Análise feita em 17/11/2026.
+
+**Retrato em 17/11/2026 (últimas 24h):** banco com 1,75 MB e cerca de 40 contas; 54 mil linhas lidas por dia (o limite gratuito é 5 milhões); cerca de 13 mil consultas por dia. O backup semanal rodou em 16/11 às 20h, sem erro; o próximo é em 23/11.
+
+**Projeção** (estimativa de cerca de 3 mil usuários ativos por dia no fim do ano): cerca de 11 milhões de leituras por dia e cerca de 450 MB de banco. Isso **passa do plano gratuito**, que tem limite de 5 milhões de leituras por dia e banco de até 500 MB. No **Workers Paid (US$ 5 por mês)**, cabe com folga: 25 bilhões de leituras por mês, banco de até 10 GB e Time Travel de 30 dias.
+
+**Como o Avia reage a falhas:**
+- **Servidor fora do ar:** o Android continua funcionando (SQLite local e lembretes agendados no aparelho) e sincroniza quando o servidor volta. A **web para**.
+- **Proteção contra perda de dados:** são 3 camadas. A cópia em cada celular, o Time Travel do D1 (7 dias no plano grátis, 30 no pago) e o backup semanal cifrado (no PC e no Google Drive).
+- **Perda irrecuperável (de propósito):** quem usa a criptografia E2E e perde a frase secreta e o código de recuperação.
+
+**Riscos, do mais grave ao menor:**
+| | Risco | Solução |
+|---|---|---|
+| 🔴 1 | **Plano gratuito:** desde 01/09/2026, o D1 **bloqueia as consultas** quando o limite diário é ultrapassado, até 00:00 UTC. Em 10/11 o uso chegou a 78%. | Assinar o **Workers Paid (US$ 5 por mês)** no painel da Cloudflare. Só o Evandro pode fazer, porque envolve cartão. |
+| 🔴 2 | **Nenhum alerta:** um problema só é descoberto quando alguém reclama. | Alertas de uso e cobrança na Cloudflare, um monitor externo gratuito do servidor (uptime) e acompanhamento dos travamentos no Play Console (Android vitals). |
+| 🟠 3 | **Uma publicação com defeito** atinge todos de uma vez. | Roteiro de testes antes de cada publicação e um procedimento de volta documentado (`npx wrangler rollback`, dentro de `worker/`). |
+| 🟠 4 | **Não existe "esqueci minha senha":** gera suporte e avaliação ruim. | Serviço de e-mail para recuperação de senha e confirmação de cadastro. |
+| 🟠 5 | **A restauração nunca foi ensaiada** em condição real. | Ensaio: restaurar o último `.aviabkp` num banco de teste e conferir contas e tarefas. Testar também o Time Travel (`wrangler d1 time-travel info`). |
+| 🟡 6 | **Tudo depende de uma pessoa:** domínio, cartão, contas. | Lista de contas e renovações (domínio edsavia.com.br, cartão da Cloudflare, Google Play, Expo, Firebase, GitHub) e 2FA em todas. |
+| 🟡 7 | **Sincronização a cada 20 s** (`INTERVALO_POLLING_MS` em `src/context/ItemsContext.tsx`): o custo cresce junto com os usuários. | No plano pago, não preocupa. Otimizar se passar de cerca de 2 mil usuários ativos por dia. |
+
+**Fases:**
+- **A. Antes de abrir a produção (meta: fim de semana de 21–22/11/2026):** itens 1, 2, 3 e 5.
+- **B. Primeiros meses depois do lançamento:** itens 4 e 6, a limpeza das tarefas excluídas (cerca de 590 linhas) e o backup automático fora do PC. Hoje o backup depende do computador ligado; se ele estiver desligado às 20h de segunda, roda assim que o computador ligar.
+- **C. Acima de cerca de 2 mil usuários ativos por dia:** revisar a frequência da sincronização, o tempo de resposta para o Brasil (o banco fica na região ENAM, nos EUA; avaliar a réplica de leitura do D1) e o volume de suporte.
+
+**Status:** fase A **não iniciada**.
 
 ---
 
