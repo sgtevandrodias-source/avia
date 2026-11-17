@@ -34,7 +34,7 @@ App de **agenda, tarefas e lembretes** em português. A pessoa fala ou digita ("
 | Produção (loja aberta) | **Ainda não.** Requisitos 1 e 2 cumpridos (versão publicada e ≥12 testadores). Falta o 3: **14 dias seguidos**, previsto para por volta de **29/11/2026**. |
 
 ### Próximos passos (em ordem)
-1. **Religar a "Proteção automática"** (Play Console → app Avia → ícone de escudo, "Protegido com o Google Play" → Proteção automática → Começar). Ela foi desligada por engano em 13/11 e só vale para versões **enviadas depois** de ligada. Ao preparar a produção, confira se a versão precisa ser reenviada para ficar protegida.
+1. ~~Religar a "Proteção automática"~~: **feito em 17/11/2026** ("Proteção boa", 1 de 1 serviço ativo). Ela só vale para versões **enviadas depois** de ligada: ao preparar a produção, confira se a versão precisa ser reenviada para ficar protegida. A "API Play Integrity" (0 de 7) exige integração no código e é opcional, não está planejada.
 2. **Manter ≥12 testadores inscritos** até completar os 14 dias. Se alguém sair do teste, a contagem pode ser afetada. O andamento aparece em Painel → Produção.
 3. Por volta de **29/11/2026**: **pedir acesso à produção** (Painel → Produção → "Solicitar a produção"). O Google faz perguntas sobre o teste fechado, e a análise leva alguns dias.
 4. **Reembolso dos R$ 1,49** aos testadores, quando o Evandro quiser (Play Console → Monetizar → Pedidos).
